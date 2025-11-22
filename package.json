@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "react-native-tcp-socket": "^6.3.0"
+  }
+}
