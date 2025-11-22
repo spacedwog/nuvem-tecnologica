@@ -4,7 +4,7 @@ export function connectWebSocketServer({ url, onLog }: { url: string; onLog: (ms
   ws.onopen = () => onLog("WebSocket conectado!");
   ws.onmessage = ({ data }) => onLog("Recebido: " + data);
   ws.onerror = (err) => onLog("Erro WebSocket: " + JSON.stringify(err));
-  ws.onclose = () => onLog("WebSocket fechado.");
+  ws.onclose = () => onLog("WebSocket fechado."); // Evento de fechamento aqui!
 
   return ws;
 }

@@ -1,56 +1,124 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Button, Modal, ScrollView } from 'react-native';
+import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity } from 'react-native';
 import { useState } from 'react';
 import { connectWebSocketServer } from './TcpClient';
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
   const [log, setLog] = useState<string[]>([]);
-  const [client, setClient] = useState<any | null>(null);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
 
   function addLog(message: string) {
-    setLog(prev => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
+    setLog((prev) => [...prev, `${new Date().toLocaleTimeString()}: ${message}`]);
   }
 
   function handleConnect() {
-    connectWebSocketServer({ url: "ws://192.168.15.8:8081", onLog: addLog });
+    if (socket) {
+      addLog("Já conectado.");
+      return;
+    }
+    const ws = connectWebSocketServer({
+      url: "ws://192.168.15.8:8000",
+      onLog: addLog
+    });
+    setSocket(ws);
   }
 
   function handleDisconnect() {
-    if (client) {
-      client.destroy();
-      setClient(null);
-      addLog('Desconectado manualmente.');
+    if (socket) {
+      socket.close();
+      setSocket(null);
+      addLog("Desconectado manualmente.");
     }
   }
 
   return (
     <View style={styles.container}>
-      <Text>Log da conexão TCP/IP</Text>
-      <Button title="Conectar TCP/IP" onPress={handleConnect} />
-      <Button title="Desconectar" onPress={handleDisconnect} />
-      <Button title="Exibir log" onPress={() => setModalVisible(true)} />
+      <Text style={styles.heading}>Log da conexão WebSocket</Text>
+      <View style={styles.buttonRow}>
+        <Button title="Conectar WebSocket" onPress={handleConnect} />
+        <Button title="Desconectar" onPress={handleDisconnect} />
+        <Button title="Exibir log" onPress={() => setModalVisible(true)} />
+      </View>
+      <StatusBar style="auto" />
 
-      <Modal visible={modalVisible} animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>Log da conexão TCP/IP</Text>
-          <ScrollView style={styles.logContainer}>
-            {log.map((item, i) => (
-              <Text key={i} style={styles.logText}>{item}</Text>
-            ))}
-          </ScrollView>
-          <Button title="Fechar" onPress={() => setModalVisible(false)} />
+      <Modal
+        visible={modalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Log da conexão WebSocket</Text>
+            <ScrollView style={styles.logContainer}>
+              {log.length === 0 ? (
+                <Text style={styles.emptyText}>Nenhum evento ainda</Text>
+              ) : (
+                log.map((item, i) => (
+                  <Text key={i} style={styles.logText}>{item}</Text>
+                ))
+              )}
+            </ScrollView>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+              <Text style={styles.closeButtonText}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
-      <StatusBar style="auto" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#d47b5296', alignItems: 'center', justifyContent: 'center', },
-  modalContainer: { flex: 1, padding: 42, backgroundColor: '#a656acff', },
-  modalTitle: { fontSize: 22, marginBottom: 12, fontWeight: 'bold', },
-  logContainer: { flex: 1, marginBottom: 16, },
-  logText: { fontSize: 16, paddingVertical: 4, },
+  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  heading: { fontSize: 18, marginBottom: 20, fontWeight: 'bold' },
+  buttonRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 30 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  card: {
+    width: '85%',
+    minHeight: 340,
+    maxHeight: '75%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.23,
+    shadowRadius: 9.51,
+    elevation: 14,
+    alignItems: 'stretch'
+  },
+  cardTitle: {
+    fontSize: 22,
+    marginBottom: 18,
+    fontWeight: 'bold',
+    textAlign: 'center'
+  },
+  logContainer: {
+    flex: 1,
+    marginBottom: 18,
+    maxHeight: 200,
+  },
+  logText: {
+    fontSize: 16,
+    paddingVertical: 3,
+    borderBottomColor: '#eee',
+    borderBottomWidth: 1,
+  },
+  emptyText: { textAlign: 'center', fontStyle: 'italic', color: '#999', fontSize: 16 },
+  closeButton: {
+    backgroundColor: '#0077ff',
+    alignSelf: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 28,
+    paddingVertical: 11,
+    marginTop: 5,
+  },
+  closeButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
 });
