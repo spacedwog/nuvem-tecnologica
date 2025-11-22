@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Button, Modal, ScrollView } from 'react-native';
 import { useState } from 'react';
-import { connectTcpServer } from './TcpClient';
+import { connectWebSocketServer } from './TcpClient';
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -13,16 +13,7 @@ export default function App() {
   }
 
   function handleConnect() {
-    if (client) {
-      addLog('Já está conectado.');
-      return;
-    }
-    const newClient = connectTcpServer({
-      host: '192.168.0.100', // seu IP
-      port: 8000,             // sua porta
-      onLog: addLog
-    });
-    setClient(newClient);
+    connectWebSocketServer({ url: "ws://192.168.15.8:8000", onLog: addLog });
   }
 
   function handleDisconnect() {
