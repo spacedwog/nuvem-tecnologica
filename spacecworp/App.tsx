@@ -13,7 +13,7 @@ export default function App() {
   }
 
   function handleConnect() {
-    connectWebSocketServer({ url: "ws://192.168.15.8:8000", onLog: addLog });
+    connectWebSocketServer({ url: "ws://192.168.15.8:8081", onLog: addLog });
   }
 
   function handleDisconnect() {
@@ -48,8 +48,8 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', },
-  modalContainer: { flex: 1, padding: 24, backgroundColor: '#f0f0f0', },
+  container: { flex: 1, backgroundColor: '#d47b5296', alignItems: 'center', justifyContent: 'center', },
+  modalContainer: { flex: 1, padding: 42, backgroundColor: '#a656acff', },
   modalTitle: { fontSize: 22, marginBottom: 12, fontWeight: 'bold', },
   logContainer: { flex: 1, marginBottom: 16, },
   logText: { fontSize: 16, paddingVertical: 4, },
