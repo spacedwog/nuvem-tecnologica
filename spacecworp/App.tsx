@@ -23,7 +23,7 @@ export default function App() {
     }
     setSocketState('connecting');
     const ws = connectWebSocketServer({
-      url: "ws://192.168.15.8:8000", // Altere conforme seu servidor
+      url: "wss://192.168.15.8:8000", // Endpoint público WebSocket!
       onLog: addLog,
     });
     setSocket(ws);
