@@ -1,10 +1,9 @@
-// Compatível com Expo Go!
 export function connectWebSocketServer({ url, onLog }: { url: string; onLog: (msg: string, type?: string) => void }) {
   const ws = new WebSocket(url);
 
   ws.onopen = () => onLog("WebSocket conectado!", "success");
   ws.onmessage = ({ data }) => onLog("Recebido: " + data, "received");
-  ws.onerror = (err) => onLog("Erro WebSocket: " + JSON.stringify(err), "error");
+  ws.onerror = (err) => onLog("Erro WebSocket: Não foi possível conectar ou receber dados.", "error");
   ws.onclose = () => onLog("WebSocket fechado.", "closed");
 
   return ws;

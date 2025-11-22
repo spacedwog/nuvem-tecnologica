@@ -13,8 +13,7 @@ export default function App() {
   function addLog(message: string, type?: string) {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: message, type }]);
     if (type === 'success') setSocketState('open');
-    if (type === 'closed') setSocketState('closed');
-    if (type === 'error') setSocketState('closed');
+    if (type === 'closed' || type === 'error') setSocketState('closed');
   }
 
   function handleConnect() {
