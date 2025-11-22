@@ -1,10 +1,10 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Button } from 'react-native';
-import connectTcpServer from './TcpClient';
+import connectWebSocketServer from "./TcpClient";
 
 export default function App() {
   function handleConnect() {
-    connectTcpServer('192.168.0.100', 8000); // Altere para IP/porta do servidor desejado
+    connectWebSocketServer("ws://192.168.15.8:8000"); // troque pelo seu servidor
   }
 
   return (
