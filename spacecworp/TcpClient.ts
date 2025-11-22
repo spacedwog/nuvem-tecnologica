@@ -1,22 +1,10 @@
-import TcpSocket from 'react-native-tcp-socket';
+export function connectWebSocketServer({ url, onLog }: { url: string; onLog: (msg: string) => void }) {
+  const ws = new WebSocket(url);
 
-export function connectTcpServer({ host, port, onLog }: { host: string; port: number; onLog: (msg: string) => void }) {
-  const client = TcpSocket.createConnection({ host, port }, () => {
-    onLog(`Conectado ao servidor TCP (${host}:${port})`);
-    client.write('Hello server!');
-  });
+  ws.onopen = () => onLog("WebSocket conectado!");
+  ws.onmessage = ({ data }) => onLog("Recebido: " + data);
+  ws.onerror = (err) => onLog("Erro WebSocket: " + JSON.stringify(err));
+  ws.onclose = () => onLog("WebSocket fechado.");
 
-  client.on('data', (data) => {
-    onLog('Recebido: ' + data.toString());
-  });
-
-  client.on('error', (error) => {
-    onLog('Erro: ' + error.message);
-  });
-
-  client.on('close', () => {
-    onLog('Conexão encerrada.');
-  });
-
-  return client;
+  return ws;
 }
