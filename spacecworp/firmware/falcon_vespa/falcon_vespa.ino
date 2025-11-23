@@ -29,31 +29,31 @@ void motores_stop() {
 }
 
 void motores_forward() {
-  digitalWrite(MOTORA_A_PIN, HIGH);
-  digitalWrite(MOTORA_B_PIN, LOW);
+  digitalWrite(MOTORA_A_PIN, LOW);
+  digitalWrite(MOTORA_B_PIN, HIGH);
   digitalWrite(MOTORB_A_PIN, HIGH);
   digitalWrite(MOTORB_B_PIN, LOW);
 }
 
 void motores_backward() {
-  digitalWrite(MOTORA_A_PIN, LOW);
-  digitalWrite(MOTORA_B_PIN, HIGH);
+  digitalWrite(MOTORA_A_PIN, HIGH);
+  digitalWrite(MOTORA_B_PIN, LOW);
   digitalWrite(MOTORB_A_PIN, LOW);
   digitalWrite(MOTORB_B_PIN, HIGH);
 }
 
 void motores_left() {
   digitalWrite(MOTORA_A_PIN, LOW);
-  digitalWrite(MOTORA_B_PIN, HIGH);
-  digitalWrite(MOTORB_A_PIN, HIGH);
+  digitalWrite(MOTORA_B_PIN, LOW);    // Motor A parado
+  digitalWrite(MOTORB_A_PIN, HIGH);   // Motor B frente máximo
   digitalWrite(MOTORB_B_PIN, LOW);
 }
 
 void motores_right() {
-  digitalWrite(MOTORA_A_PIN, HIGH);
-  digitalWrite(MOTORA_B_PIN, LOW);
+  digitalWrite(MOTORA_A_PIN, LOW);
+  digitalWrite(MOTORA_B_PIN, HIGH);   // Motor A frente máximo
   digitalWrite(MOTORB_A_PIN, LOW);
-  digitalWrite(MOTORB_B_PIN, HIGH);
+  digitalWrite(MOTORB_B_PIN, LOW); 
 }
 
 // ==================== ULTRASSONICO =============================

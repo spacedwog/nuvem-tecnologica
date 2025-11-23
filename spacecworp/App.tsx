@@ -26,20 +26,21 @@ export default function App() {
     }
   }
 
-  async function handleSendData() {
+  async function handleSendData(cmd?: string) {
     if (!isConnected) {
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Não está conectado ao ESP32-CAM.", type: "error" }]);
       return;
     }
-    if (!textToSend.trim()) return;
-    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Enviando comando: " + textToSend, type: "sent" }]);
+    const toSend = (cmd !== undefined ? cmd : textToSend).trim();
+    if (!toSend) return;
+    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Enviando comando: " + toSend, type: "sent" }]);
     try {
-      const resp = await sendCommand(textToSend.trim());
+      const resp = await sendCommand(toSend);
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Resposta: " + resp, type: "received" }]);
     } catch (e: any) {
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: e.message, type: "error" }]);
     } finally {
-      setTextToSend('');
+      if (cmd === undefined) setTextToSend('');
     }
   }
 
@@ -48,6 +49,15 @@ export default function App() {
     setStatus(null);
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
+
+  // JOYSTICK COMMANDOS
+  const joystickCommands = [
+    { label: "⬆️", cmd: "forward", bg: "#5cb7f8" },
+    { label: "⬅️", cmd: "left", bg: "#92e3a9" },
+    { label: "⏹️", cmd: "stop", bg: "#ffd67f" },
+    { label: "➡️", cmd: "right", bg: "#f7be87" },
+    { label: "⬇️", cmd: "back", bg: "#f88989" },
+  ];
 
   return (
     <View style={styles.container}>
@@ -74,6 +84,51 @@ export default function App() {
         <Button title="Exibir log" onPress={() => setModalVisible(true)} />
       </View>
 
+      {/* JOYSTICK */}
+      <View style={styles.joystickWrapper}>
+        <View style={styles.joystickRow}>
+          <TouchableOpacity
+            onPress={() => handleSendData('forward')}
+            style={[styles.joystickButton, { backgroundColor: joystickCommands[0].bg }]}
+            disabled={!isConnected}
+          >
+            <Text style={styles.joystickText}>{joystickCommands[0].label}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.joystickRow}>
+          <TouchableOpacity
+            onPress={() => handleSendData('left')}
+            style={[styles.joystickButton, { backgroundColor: joystickCommands[1].bg }]}
+            disabled={!isConnected}
+          >
+            <Text style={styles.joystickText}>{joystickCommands[1].label}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleSendData('stop')}
+            style={[styles.joystickButton, { backgroundColor: joystickCommands[2].bg }]}
+            disabled={!isConnected}
+          >
+            <Text style={styles.joystickText}>{joystickCommands[2].label}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => handleSendData('right')}
+            style={[styles.joystickButton, { backgroundColor: joystickCommands[3].bg }]}
+            disabled={!isConnected}
+          >
+            <Text style={styles.joystickText}>{joystickCommands[3].label}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.joystickRow}>
+          <TouchableOpacity
+            onPress={() => handleSendData('back')}
+            style={[styles.joystickButton, { backgroundColor: joystickCommands[4].bg }]}
+            disabled={!isConnected}
+          >
+            <Text style={styles.joystickText}>{joystickCommands[4].label}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <View style={styles.sendRow}>
         <TextInput
           style={styles.textInput}
@@ -87,7 +142,7 @@ export default function App() {
             styles.sendButton,
             textToSend.trim() && isConnected ? {} : styles.sendButtonDisabled
           ]}
-          onPress={handleSendData}
+          onPress={() => handleSendData()}
           disabled={!textToSend.trim() || !isConnected}
         >
           <Text style={styles.sendButtonText}>Enviar</Text>
@@ -169,10 +224,41 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   sendButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+
   statusBox: {
     padding: 12, marginVertical: 6, borderRadius: 10,
     backgroundColor: "#f2f9ff", alignSelf: "stretch", marginHorizontal: 12
   },
+  
+  joystickWrapper: {
+    flexDirection: 'column', alignItems: 'center', marginBottom: 20,
+  },
+  joystickRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 5,
+    gap: 9,
+  },
+  joystickButton: {
+    width: 65,
+    height: 65,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 9,
+    backgroundColor: '#eee',
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    opacity: 1,
+  },
+  joystickText: {
+    fontSize: 27,
+    fontWeight: 'bold',
+    color: '#1c1c1c',
+    textAlign: 'center'
+  },
+
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center', },
   card: {
     width: '94%',
