@@ -1,8 +1,8 @@
 /*******************************************************************************
  * ESP32-CAM (Vespa) + LEDs (Motores simulados) + Ultrassônico + WiFi STA/AP + HTTP Server
  * Adaptado para controle de LEDs como motores
+ * Agora com busca via DuckDuckGo Instant Answer API!
  ******************************************************************************/
-
 
 #include <WiFi.h>
 #include <WebServer.h>
@@ -112,46 +112,51 @@ void handleControl() {
   server.send(200, "text/plain", "OK: " + cmd);
 }
 
-// ================ ENDPOINT GOOGLE ==============================
+// ================ ENDPOINT DE BUSCA VIA DUCKDUCKGO ==============================
 
-void handleGoogle() {
+void handleDuckDuckGo() {
   if (!server.hasArg("q")) {
-    server.send(400, "text/plain", "Erro: use /google?q=pesquisa");
+    server.send(400, "text/plain", "Erro: use /duck?q=pesquisa");
     return;
   }
 
   String query = server.arg("q");
-  // Format search string for URL
   query.replace(" ", "+");
-  String url = "http://www.google.com/search?q=" + query;
+
+  String url = "https://api.duckduckgo.com/?q=" + query + "&format=json";
 
   HTTPClient http;
   http.begin(url);
+  http.addHeader("User-Agent", "ESP32-CAM-Agent");  // Adiciona User-Agent customizado
 
   int httpCode = http.GET();
-  String resposta = "";
+  if (httpCode > 0) {
+    if (httpCode == HTTP_CODE_OK) {
+      String resposta = http.getString();
 
-  if (httpCode == 200) {
-    resposta = http.getString();
-
-    // Busca o primeiro link válido de resultado
-    int resStart = resposta.indexOf("<a href=\"/url?q=");
-    if (resStart > 0) {
-      resStart += 14;
-      int resEnd = resposta.indexOf("&", resStart);
-      if (resEnd > resStart) {
-        String resultURL = resposta.substring(resStart, resEnd);
-        String json = "{\"result\":\"" + resultURL + "\"}";
-        server.send(200, "application/json", json);
-        http.end();
-        return;
+      // Try parsing with ArduinoJson
+      DynamicJsonDocument doc(4096);
+      DeserializationError error = deserializeJson(doc, resposta);
+      String resumo = "";
+      String absUrl = "";
+      if (!error) {
+        resumo = doc["Abstract"] | "";
+        absUrl = doc["AbstractURL"] | "";
       }
+
+      String json = "{\"resumo\":\"" + resumo + "\",\"url\":\"" + absUrl + "\"}";
+      server.send(200, "application/json", json);
+      http.end();
+      return;
+    } else {
+      server.send(502, "application/json", "{\"error\": \"HTTP code: " + String(httpCode) + "\"}");
+      http.end();
+      return;
     }
-    server.send(200, "application/json", "{\"error\":\"sem resultados\"}");
   } else {
-    server.send(502, "application/json", "{\"error\":\"falha busca google\"}");
+    server.send(502, "application/json", "{\"error\":\"falha busca duckduckgo - conexão http\"}");
+    http.end();
   }
-  http.end();
 }
 
 // ==================== WiFi Logic ===============================
@@ -202,8 +207,8 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/cmd", handleControl);
 
-  // Novo endpoint Google
-  server.on("/google", handleGoogle);
+  // Endpoint DuckDuckGo usando DDG Instant Answer
+  server.on("/duck", handleDuckDuckGo);
 
   server.begin();
   Serial.println("Servidor HTTP iniciado!");
