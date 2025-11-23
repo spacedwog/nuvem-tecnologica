@@ -1,23 +1,63 @@
 /*******************************************************************************
- * ESP32-CAM (Vespa) + Motores (RoboCore_Vespa) + Ultrassônico + WiFi STA/AP + HTTP Server
- * Integração com RoboCore_Vespa.h conforme solicitado!
+ * ESP32-CAM (Vespa) + LEDs (Motores simulados) + Ultrassônico + WiFi STA/AP + HTTP Server
+ * Adaptado para controle de LEDs como motores
  ******************************************************************************/
 
-#include "RoboCore_Vespa.h"
 #include <WiFi.h>
 #include <WebServer.h>
 
-// ========================== CONFIG WiFi ==============================
+// ===================== CONFIG WiFi ==============================
 const char* WIFI_SSID     = "FAMILIA SANTOS";
 const char* WIFI_PASSWORD = "6z2h1j3k9f";
 const char* AP_SSID = "Vespa-AP";
 const char* AP_PASSWORD = "falcon_vespa";
 
-// ========================== Motores (via RoboCore_Vespa) =============
-VespaMotors motors;
+// ===================== LEDs como Motores ========================
+// MOTOR B: D4 e D27
+// MOTOR A: D13 e D14
 
-// ========================== Ultrassônico =============================
-// Pinos recomendados no ESP32-CAM
+#define MOTORB_A_PIN 4    // D4
+#define MOTORB_B_PIN 27   // D27
+#define MOTORA_A_PIN 13   // D13
+#define MOTORA_B_PIN 14   // D14
+
+void motores_stop() {
+  digitalWrite(MOTORA_A_PIN, LOW);
+  digitalWrite(MOTORA_B_PIN, LOW);
+  digitalWrite(MOTORB_A_PIN, LOW);
+  digitalWrite(MOTORB_B_PIN, LOW);
+}
+
+void motores_forward() {
+  digitalWrite(MOTORA_A_PIN, HIGH);
+  digitalWrite(MOTORA_B_PIN, LOW);
+  digitalWrite(MOTORB_A_PIN, HIGH);
+  digitalWrite(MOTORB_B_PIN, LOW);
+}
+
+void motores_backward() {
+  digitalWrite(MOTORA_A_PIN, LOW);
+  digitalWrite(MOTORA_B_PIN, HIGH);
+  digitalWrite(MOTORB_A_PIN, LOW);
+  digitalWrite(MOTORB_B_PIN, HIGH);
+}
+
+void motores_left() {
+  digitalWrite(MOTORA_A_PIN, LOW);
+  digitalWrite(MOTORA_B_PIN, HIGH);
+  digitalWrite(MOTORB_A_PIN, HIGH);
+  digitalWrite(MOTORB_B_PIN, LOW);
+}
+
+void motores_right() {
+  digitalWrite(MOTORA_A_PIN, HIGH);
+  digitalWrite(MOTORA_B_PIN, LOW);
+  digitalWrite(MOTORB_A_PIN, LOW);
+  digitalWrite(MOTORB_B_PIN, HIGH);
+}
+
+// ==================== ULTRASSONICO =============================
+
 #define TRIG_PIN 21
 #define ECHO_PIN 22
 
@@ -35,7 +75,7 @@ long readUltrasonic() {
   return distance;
 }
 
-// ========================== HTTP SERVER ==============================
+// ==================== HTTP SERVER ==============================
 
 WebServer server(80);
 
@@ -57,11 +97,11 @@ void handleControl() {
 
   String cmd = server.arg("cmd");
 
-  if (cmd == "stop") motors.stop();
-  else if (cmd == "forward") motors.forward(100);        // velocidade 100% para frente
-  else if (cmd == "back") motors.backward(100);          // velocidade 100% para trás
-  else if (cmd == "left") motors.setSpeedLeft(-100), motors.setSpeedRight(100);   // rotaciona à esquerda
-  else if (cmd == "right") motors.setSpeedLeft(100), motors.setSpeedRight(-100);  // rotaciona à direita
+  if (cmd == "stop") motores_stop();
+  else if (cmd == "forward") motores_forward();
+  else if (cmd == "back") motores_backward();
+  else if (cmd == "left") motores_left();
+  else if (cmd == "right") motores_right();
   else {
     server.send(400, "text/plain", "Comando invalido");
     return;
@@ -70,7 +110,7 @@ void handleControl() {
   server.send(200, "text/plain", "OK: " + cmd);
 }
 
-// ========================== WiFi LOGIC ===============================
+// ==================== WiFi Logic ===============================
 
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
@@ -98,13 +138,20 @@ void connectWiFi() {
   }
 }
 
-// ========================== SETUP ====================================
+// ==================== SETUP ====================================
 
 void setup() {
   Serial.begin(115200);
 
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
+
+  pinMode(MOTORA_A_PIN, OUTPUT);
+  pinMode(MOTORA_B_PIN, OUTPUT);
+  pinMode(MOTORB_A_PIN, OUTPUT);
+  pinMode(MOTORB_B_PIN, OUTPUT);
+
+  motores_stop();
 
   connectWiFi();
 
@@ -115,16 +162,16 @@ void setup() {
   Serial.println("Servidor HTTP iniciado!");
 }
 
-// ========================== LOOP =====================================
+// ==================== LOOP =====================================
 
 void loop() {
   server.handleClient();
 
-  // Segurança: se um objeto estiver muito perto, parar o robô
+  // Segurança: para o robô se um objeto estiver muito perto
   long dist = readUltrasonic();
   if (dist > 0 && dist < 15) {
-    motors.stop();
-    Serial.println("⚠️ Obstáculo detectado! Motores parados.");
+    motores_stop();
+    Serial.println("⚠️ Obstáculo detectado! Robô parado.");
   }
 
   delay(50);
