@@ -19,3 +19,9 @@ export async function sendCommand(cmd: string) {
     throw new Error(e.message || "Falha ao enviar comando.");
   }
 }
+
+export async function sendGoogleSearch(query) {
+  const response = await fetch(`${BASE_URL}/google?q=${encodeURIComponent(query)}`);
+  const dados = await response.json();
+  return dados.result || dados.error;
+}

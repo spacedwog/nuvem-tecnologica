@@ -3,8 +3,10 @@
  * Adaptado para controle de LEDs como motores
  ******************************************************************************/
 
+
 #include <WiFi.h>
 #include <WebServer.h>
+#include <HTTPClient.h>
 
 // ===================== CONFIG WiFi ==============================
 const char* WIFI_SSID     = "FAMILIA SANTOS";
@@ -110,6 +112,48 @@ void handleControl() {
   server.send(200, "text/plain", "OK: " + cmd);
 }
 
+// ================ ENDPOINT GOOGLE ==============================
+
+void handleGoogle() {
+  if (!server.hasArg("q")) {
+    server.send(400, "text/plain", "Erro: use /google?q=pesquisa");
+    return;
+  }
+
+  String query = server.arg("q");
+  // Format search string for URL
+  query.replace(" ", "+");
+  String url = "http://www.google.com/search?q=" + query;
+
+  HTTPClient http;
+  http.begin(url);
+
+  int httpCode = http.GET();
+  String resposta = "";
+
+  if (httpCode == 200) {
+    resposta = http.getString();
+
+    // Busca o primeiro link válido de resultado
+    int resStart = resposta.indexOf("<a href=\"/url?q=");
+    if (resStart > 0) {
+      resStart += 14;
+      int resEnd = resposta.indexOf("&", resStart);
+      if (resEnd > resStart) {
+        String resultURL = resposta.substring(resStart, resEnd);
+        String json = "{\"result\":\"" + resultURL + "\"}";
+        server.send(200, "application/json", json);
+        http.end();
+        return;
+      }
+    }
+    server.send(200, "application/json", "{\"error\":\"sem resultados\"}");
+  } else {
+    server.send(502, "application/json", "{\"error\":\"falha busca google\"}");
+  }
+  http.end();
+}
+
 // ==================== WiFi Logic ===============================
 
 void connectWiFi() {
@@ -157,6 +201,9 @@ void setup() {
 
   server.on("/", handleRoot);
   server.on("/cmd", handleControl);
+
+  // Novo endpoint Google
+  server.on("/google", handleGoogle);
 
   server.begin();
   Serial.println("Servidor HTTP iniciado!");
