@@ -1,33 +1,22 @@
 /*******************************************************************************
- * ESP32-CAM (Vespa) + Motores + Ultrassônico + WiFi STA/AP + HTTP Server
- * Baseado no código de motores da RoboCore (Vespa)
- * Desenvolvido para Felipe Santos - 2025
+ * ESP32-CAM (Vespa) + Motores (RoboCore_Vespa) + Ultrassônico + WiFi STA/AP + HTTP Server
+ * Integração com RoboCore_Vespa.h conforme solicitado!
  ******************************************************************************/
 
 #include "RoboCore_Vespa.h"
 #include <WiFi.h>
 #include <WebServer.h>
 
-// ==========================================================================
-// ----------------------------- CONFIG WiFi --------------------------------
-// ==========================================================================
-
+// ========================== CONFIG WiFi ==============================
 const char* WIFI_SSID     = "FAMILIA SANTOS";
 const char* WIFI_PASSWORD = "6z2h1j3k9f";
-
 const char* AP_SSID = "Vespa-AP";
 const char* AP_PASSWORD = "falcon_vespa";
 
-// ==========================================================================
-// ----------------------------- MOTORES ------------------------------------
-// ==========================================================================
-
+// ========================== Motores (via RoboCore_Vespa) =============
 VespaMotors motors;
 
-// ==========================================================================
-// ----------------------------- ULTRASSONICO -------------------------------
-// ==========================================================================
-
+// ========================== Ultrassônico =============================
 // Pinos recomendados no ESP32-CAM
 #define TRIG_PIN 21
 #define ECHO_PIN 22
@@ -46,9 +35,7 @@ long readUltrasonic() {
   return distance;
 }
 
-// ==========================================================================
-// ----------------------------- HTTP SERVER --------------------------------
-// ==========================================================================
+// ========================== HTTP SERVER ==============================
 
 WebServer server(80);
 
@@ -71,10 +58,10 @@ void handleControl() {
   String cmd = server.arg("cmd");
 
   if (cmd == "stop") motors.stop();
-  else if (cmd == "forward") motors.forward(120);
-  else if (cmd == "back") motors.backward(120);
-  else if (cmd == "left") motors.setSpeedLeft(-120), motors.setSpeedRight(120);
-  else if (cmd == "right") motors.setSpeedLeft(120), motors.setSpeedRight(-120);
+  else if (cmd == "forward") motors.forward(100);        // velocidade 100% para frente
+  else if (cmd == "back") motors.backward(100);          // velocidade 100% para trás
+  else if (cmd == "left") motors.setSpeedLeft(-100), motors.setSpeedRight(100);   // rotaciona à esquerda
+  else if (cmd == "right") motors.setSpeedLeft(100), motors.setSpeedRight(-100);  // rotaciona à direita
   else {
     server.send(400, "text/plain", "Comando invalido");
     return;
@@ -83,9 +70,7 @@ void handleControl() {
   server.send(200, "text/plain", "OK: " + cmd);
 }
 
-// ==========================================================================
-// ----------------------------- WiFi LOGIC ---------------------------------
-// ==========================================================================
+// ========================== WiFi LOGIC ===============================
 
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
@@ -105,19 +90,15 @@ void connectWiFi() {
     Serial.println(WiFi.localIP());
   } else {
     Serial.println("\nFalha! Iniciando modo Soft-AP...");
-    
     WiFi.mode(WIFI_AP);
     WiFi.softAP(AP_SSID, AP_PASSWORD);
-
     Serial.println("Soft-AP iniciado.");
     Serial.print("IP AP: ");
     Serial.println(WiFi.softAPIP());
   }
 }
 
-// ==========================================================================
-// ----------------------------- SETUP --------------------------------------
-// ==========================================================================
+// ========================== SETUP ====================================
 
 void setup() {
   Serial.begin(115200);
@@ -134,18 +115,16 @@ void setup() {
   Serial.println("Servidor HTTP iniciado!");
 }
 
-// ==========================================================================
-// ----------------------------- LOOP ---------------------------------------
-// ==========================================================================
+// ========================== LOOP =====================================
 
 void loop() {
   server.handleClient();
-  
-  // Segurança: se um objeto estiver muito perto, parar o robô automaticamente
+
+  // Segurança: se um objeto estiver muito perto, parar o robô
   long dist = readUltrasonic();
   if (dist > 0 && dist < 15) {
     motors.stop();
-    Serial.println("⚠️ Obstáculo detectado! Robô parado.");
+    Serial.println("⚠️ Obstáculo detectado! Motores parados.");
   }
 
   delay(50);
