@@ -20,7 +20,7 @@ export async function sendCommand(cmd: string) {
   }
 }
 
-export async function sendGoogleSearch(query) {
+export async function sendGoogleSearch(query: string | number | boolean) {
   const response = await fetch(`${BASE_URL}/google?q=${encodeURIComponent(query)}`);
   const dados = await response.json();
   return dados.result || dados.error;
