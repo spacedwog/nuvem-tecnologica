@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import React, { useState } from 'react';
-import { fetchStatus, sendGoogleSearch } from './ApiClient';
+import { fetchStatus, sendCommand, sendGoogleSearch } from './ApiClient';
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -26,6 +26,25 @@ export default function App() {
     }
   }
 
+  async function handleSendData(cmd?: string) {
+    if (!isConnected) {
+      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Não está conectado ao ESP32-CAM.", type: "error" }]);
+      return;
+    }
+    const toSend = (cmd !== undefined ? cmd : textToSend).trim();
+    if (!toSend) return;
+    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Enviando comando: " + toSend, type: "sent" }]);
+    try {
+      const resp = await sendCommand(toSend);
+      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Resposta: " + resp, type: "received" }]);
+    } catch (e: any) {
+      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: e.message, type: "error" }]);
+    } finally {
+      if (cmd === undefined) setTextToSend('');
+    }
+  }
+
+  // Função para enviar pesquisa ao endpoint Google
   async function handleGoogleSearch() {
     if (!isConnected) {
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Não está conectado ao ESP32-CAM.", type: "error" }]);
@@ -50,7 +69,7 @@ export default function App() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
-  // Mantém joystick:
+  // JOYSTICK COMMANDOS
   const joystickCommands = [
     { label: "⬆️", cmd: "forward", bg: "#5cb7f8" },
     { label: "⬅️", cmd: "left", bg: "#92e3a9" },
@@ -88,7 +107,7 @@ export default function App() {
       <View style={styles.joystickWrapper}>
         <View style={styles.joystickRow}>
           <TouchableOpacity
-            onPress={() => handleGoogleSearch('forward')}
+            onPress={() => handleSendData('forward')}
             style={[styles.joystickButton, { backgroundColor: joystickCommands[0].bg }]}
             disabled={!isConnected}
           >
@@ -97,21 +116,21 @@ export default function App() {
         </View>
         <View style={styles.joystickRow}>
           <TouchableOpacity
-            onPress={() => handleGoogleSearch('left')}
+            onPress={() => handleSendData('left')}
             style={[styles.joystickButton, { backgroundColor: joystickCommands[1].bg }]}
             disabled={!isConnected}
           >
             <Text style={styles.joystickText}>{joystickCommands[1].label}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => handleGoogleSearch('stop')}
+            onPress={() => handleSendData('stop')}
             style={[styles.joystickButton, { backgroundColor: joystickCommands[2].bg }]}
             disabled={!isConnected}
           >
             <Text style={styles.joystickText}>{joystickCommands[2].label}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            onPress={() => handleGoogleSearch('right')}
+            onPress={() => handleSendData('right')}
             style={[styles.joystickButton, { backgroundColor: joystickCommands[3].bg }]}
             disabled={!isConnected}
           >
@@ -120,7 +139,7 @@ export default function App() {
         </View>
         <View style={styles.joystickRow}>
           <TouchableOpacity
-            onPress={() => handleGoogleSearch('back')}
+            onPress={() => handleSendData('back')}
             style={[styles.joystickButton, { backgroundColor: joystickCommands[4].bg }]}
             disabled={!isConnected}
           >
