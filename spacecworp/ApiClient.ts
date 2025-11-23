@@ -20,8 +20,13 @@ export async function sendCommand(cmd: string) {
   }
 }
 
-export async function sendGoogleSearch(query: string | number | boolean) {
-  const response = await fetch(`${BASE_URL}/google?q=${encodeURIComponent(query)}`);
-  const dados = await response.json();
-  return dados.result || dados.error;
+export async function sendDuckSearch(query: string | number | boolean) {
+  const response = await fetch(`${BASE_URL}/duck?q=${encodeURIComponent(query)}`);
+  try{
+    const dados = await response.json();
+    return dados.result || dados.error;
+  }
+  catch(e){
+    throw new Error("Erro ao buscar na API Duck Go: " + e);
+  }
 }

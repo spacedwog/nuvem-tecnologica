@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import React, { useState } from 'react';
-import { fetchStatus, sendCommand, sendGoogleSearch } from './ApiClient';
+import { fetchStatus, sendCommand, sendDuckSearch } from './ApiClient';
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -44,17 +44,17 @@ export default function App() {
     }
   }
 
-  // Função para enviar pesquisa ao endpoint Google
-  async function handleGoogleSearch() {
+  // Função para enviar pesquisa ao endpoint Duck
+  async function handleDuckSearch() {
     if (!isConnected) {
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Não está conectado ao ESP32-CAM.", type: "error" }]);
       return;
     }
     const query = textToSend.trim();
     if (!query) return;
-    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Pesquisando no Google: " + query, type: "sent" }]);
+    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Pesquisando na API DUCK DUCK GO: " + query, type: "sent" }]);
     try {
-      const resp = await sendGoogleSearch(query);
+      const resp = await sendDuckSearch(query);
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Resultado: " + resp, type: "received" }]);
     } catch (e: any) {
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: e.message, type: "error" }]);
@@ -151,7 +151,7 @@ export default function App() {
       <View style={styles.sendRow}>
         <TextInput
           style={styles.textInput}
-          placeholder="Pesquisar no Google"
+          placeholder="Pesquisar na API DUCK DUCK GO"
           value={textToSend}
           onChangeText={setTextToSend}
           editable={isConnected}
@@ -161,7 +161,7 @@ export default function App() {
             styles.sendButton,
             textToSend.trim() && isConnected ? {} : styles.sendButtonDisabled
           ]}
-          onPress={handleGoogleSearch}
+          onPress={handleDuckSearch}
           disabled={!textToSend.trim() || !isConnected}
         >
           <Text style={styles.sendButtonText}>Pesquisar</Text>
