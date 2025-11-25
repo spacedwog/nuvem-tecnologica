@@ -9,7 +9,30 @@ export default function App() {
   const [status, setStatus] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [textToSend, setTextToSend] = useState('');
-  const [refreshing, setRefreshing] = useState(false); // <- ADICIONADO
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Função que recarrega os dados da tela principal e do modal (pode customizar para recarregar o que quiser)
+  async function handleReload() {
+    setRefreshing(true);
+    try {
+      if (isConnected) {
+        const s = await fetchStatus();
+        setStatus(s);
+        setLog((prev) => [
+          ...prev,
+          { time: new Date().toLocaleTimeString(), msg: "Status atualizado! Distância: " + s.distancia + "cm", type: "info" }
+        ]);
+      } else {
+        setLog((prev) => [
+          ...prev,
+          { time: new Date().toLocaleTimeString(), msg: "Não conectado: nada para atualizar.", type: "info" }
+        ]);
+      }
+    } catch (e: any) {
+      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Erro ao atualizar status: " + e.message, type: "error" }]);
+    }
+    setRefreshing(false);
+  }
 
   async function handleConnect() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Conectando ao ESP32-CAM...", type: "info" }]);
@@ -51,30 +74,6 @@ export default function App() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
-  // Função de recarregar para o ScrollView do Log
-  async function handleReload() {
-    setRefreshing(true);
-    try {
-      if (isConnected) {
-        const s = await fetchStatus();
-        setStatus(s);
-        setLog((prev) => [
-          ...prev,
-          { time: new Date().toLocaleTimeString(), msg: "Status atualizado! Distância: " + s.distancia + "cm", type: "info" }
-        ]);
-      } else {
-        setLog((prev) => [
-          ...prev,
-          { time: new Date().toLocaleTimeString(), msg: "Não conectado: nada para atualizar.", type: "info" }
-        ]);
-      }
-    } catch (e: any) {
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Erro ao atualizar status: " + e.message, type: "error" }]);
-    }
-    setRefreshing(false);
-  }
-
-  // JOYSTICK COMMANDOS
   const joystickCommands = [
     { label: "⬆️", cmd: "forward", bg: "#5cb7f8" },
     { label: "⬅️", cmd: "left", bg: "#92e3a9" },
@@ -85,82 +84,95 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Controle ESP32-CAM (VESPA)</Text>
-      <Text style={[
-        styles.connectionStatus,
-        isConnected ? styles.connected : styles.disconnected
-      ]}>
-        {isConnected ? "Status: Conectado" : "Status: Desconectado"}
-      </Text>
-      <View style={styles.buttonRow}>
-        <Button
-          title="Conectar"
-          onPress={handleConnect}
-          color={isConnected ? 'gray' : '#0077ff'}
-          disabled={isConnected}
-        />
-        <Button
-          title="Desconectar"
-          onPress={handleDisconnect}
-          color={isConnected ? '#d60000' : 'gray'}
-          disabled={!isConnected}
-        />
-        <Button title="Exibir log" onPress={() => setModalVisible(true)} />
-      </View>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleReload}
+            colors={["#0077ff"]}
+          />
+        }
+      >
+        <Text style={styles.heading}>Controle ESP32-CAM (VESPA)</Text>
+        <Text style={[
+          styles.connectionStatus,
+          isConnected ? styles.connected : styles.disconnected
+        ]}>
+          {isConnected ? "Status: Conectado" : "Status: Desconectado"}
+        </Text>
+        <View style={styles.buttonRow}>
+          <Button
+            title="Conectar"
+            onPress={handleConnect}
+            color={isConnected ? 'gray' : '#0077ff'}
+            disabled={isConnected}
+          />
+          <Button
+            title="Desconectar"
+            onPress={handleDisconnect}
+            color={isConnected ? '#d60000' : 'gray'}
+            disabled={!isConnected}
+          />
+          <Button title="Exibir log" onPress={() => setModalVisible(true)} />
+        </View>
 
-      {/* JOYSTICK */}
-      <View style={styles.joystickWrapper}>
-        <View style={styles.joystickRow}>
-          <TouchableOpacity
-            onPress={() => handleSendData('forward')}
-            style={[styles.joystickButton, { backgroundColor: joystickCommands[0].bg }]}
-            disabled={!isConnected}
-          >
-            <Text style={styles.joystickText}>{joystickCommands[0].label}</Text>
-          </TouchableOpacity>
+        {/* JOYSTICK */}
+        <View style={styles.joystickWrapper}>
+          <View style={styles.joystickRow}>
+            <TouchableOpacity
+              onPress={() => handleSendData('forward')}
+              style={[styles.joystickButton, { backgroundColor: joystickCommands[0].bg }]}
+              disabled={!isConnected}
+            >
+              <Text style={styles.joystickText}>{joystickCommands[0].label}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.joystickRow}>
+            <TouchableOpacity
+              onPress={() => handleSendData('left')}
+              style={[styles.joystickButton, { backgroundColor: joystickCommands[1].bg }]}
+              disabled={!isConnected}
+            >
+              <Text style={styles.joystickText}>{joystickCommands[1].label}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleSendData('stop')}
+              style={[styles.joystickButton, { backgroundColor: joystickCommands[2].bg }]}
+              disabled={!isConnected}
+            >
+              <Text style={styles.joystickText}>{joystickCommands[2].label}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleSendData('right')}
+              style={[styles.joystickButton, { backgroundColor: joystickCommands[3].bg }]}
+              disabled={!isConnected}
+            >
+              <Text style={styles.joystickText}>{joystickCommands[3].label}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.joystickRow}>
+            <TouchableOpacity
+              onPress={() => handleSendData('back')}
+              style={[styles.joystickButton, { backgroundColor: joystickCommands[4].bg }]}
+              disabled={!isConnected}
+            >
+              <Text style={styles.joystickText}>{joystickCommands[4].label}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-        <View style={styles.joystickRow}>
-          <TouchableOpacity
-            onPress={() => handleSendData('left')}
-            style={[styles.joystickButton, { backgroundColor: joystickCommands[1].bg }]}
-            disabled={!isConnected}
-          >
-            <Text style={styles.joystickText}>{joystickCommands[1].label}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleSendData('stop')}
-            style={[styles.joystickButton, { backgroundColor: joystickCommands[2].bg }]}
-            disabled={!isConnected}
-          >
-            <Text style={styles.joystickText}>{joystickCommands[2].label}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => handleSendData('right')}
-            style={[styles.joystickButton, { backgroundColor: joystickCommands[3].bg }]}
-            disabled={!isConnected}
-          >
-            <Text style={styles.joystickText}>{joystickCommands[3].label}</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.joystickRow}>
-          <TouchableOpacity
-            onPress={() => handleSendData('back')}
-            style={[styles.joystickButton, { backgroundColor: joystickCommands[4].bg }]}
-            disabled={!isConnected}
-          >
-            <Text style={styles.joystickText}>{joystickCommands[4].label}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
 
-      {isConnected && (
-        <View style={styles.statusBox}>
-          <Text>Distância (cm): <Text style={{ fontWeight: "bold" }}>{status?.distancia}</Text></Text>
-          <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
-        </View>
-      )}
+        {isConnected && (
+          <View style={styles.statusBox}>
+            <Text>Distância (cm): <Text style={{ fontWeight: "bold" }}>{status?.distancia}</Text></Text>
+            <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
+          </View>
+        )}
 
-      <StatusBar style="auto" />
+        <StatusBar style="auto" />
+      </ScrollView>
+
+      {/* Modal do log permanece igual, também usando handleReload */}
       <Modal
         visible={modalVisible}
         animationType="fade"
@@ -242,7 +254,7 @@ const styles = StyleSheet.create({
     padding: 12, marginVertical: 6, borderRadius: 10,
     backgroundColor: "#f2f9ff", alignSelf: "stretch", marginHorizontal: 12
   },
-  
+
   joystickWrapper: {
     flexDirection: 'column', alignItems: 'center', marginBottom: 20,
   },
