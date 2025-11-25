@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import React, { useState } from 'react';
 import { fetchStatus, sendCommand } from './ApiClient';
 
@@ -227,18 +227,6 @@ const styles = StyleSheet.create({
   heading: { fontSize: 20, marginBottom: 6, fontWeight: 'bold', textAlign: 'center' },
   buttonRow: { flexDirection: 'row', justifyContent: 'center', gap: 7, marginBottom: 14 },
   sendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  textInput: {
-    flex: 1,
-    borderColor: '#bbb',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 13,
-    paddingVertical: 8,
-    fontSize: 16,
-    marginRight: 8,
-    backgroundColor: '#fbfbfb',
-    minWidth: 180
-  },
   sendButton: {
     backgroundColor: '#0077ff',
     borderRadius: 8,
