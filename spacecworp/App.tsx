@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, TextInput } from 'react-native';
+import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
 import React, { useState } from 'react';
 import { fetchStatus, sendCommand } from './ApiClient';
 
@@ -9,6 +9,7 @@ export default function App() {
   const [status, setStatus] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [textToSend, setTextToSend] = useState('');
+  const [refreshing, setRefreshing] = useState(false); // <- ADICIONADO
 
   async function handleConnect() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Conectando ao ESP32-CAM...", type: "info" }]);
@@ -48,6 +49,29 @@ export default function App() {
     setIsConnected(false);
     setStatus(null);
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
+  }
+
+  // Função de recarregar para o ScrollView do Log
+  async function handleReload() {
+    setRefreshing(true);
+    try {
+      if (isConnected) {
+        const s = await fetchStatus();
+        setStatus(s);
+        setLog((prev) => [
+          ...prev,
+          { time: new Date().toLocaleTimeString(), msg: "Status atualizado! Distância: " + s.distancia + "cm", type: "info" }
+        ]);
+      } else {
+        setLog((prev) => [
+          ...prev,
+          { time: new Date().toLocaleTimeString(), msg: "Não conectado: nada para atualizar.", type: "info" }
+        ]);
+      }
+    } catch (e: any) {
+      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Erro ao atualizar status: " + e.message, type: "error" }]);
+    }
+    setRefreshing(false);
   }
 
   // JOYSTICK COMMANDOS
@@ -145,7 +169,16 @@ export default function App() {
         <View style={styles.modalOverlay}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Log</Text>
-            <ScrollView style={styles.logContainer}>
+            <ScrollView
+              style={styles.logContainer}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={handleReload}
+                  colors={["#0077ff"]}
+                />
+              }
+            >
               {log.length === 0 ? (
                 <Text style={styles.emptyText}>Nenhum evento ainda</Text>
               ) : (
