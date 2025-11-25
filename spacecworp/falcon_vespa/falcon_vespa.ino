@@ -1,5 +1,5 @@
 /*******************************************************************************
- * ESP32-CAM (Vespa) + LEDs (Motores simulados) + Ultrassônico + WiFi STA/AP + HTTP Server
+ * ESP32-CAM (Vespa) + LEDs (Motores simulados) + Ultrassônico + Sensor de Som + WiFi STA/AP + HTTP Server
  * Adaptado para controle de LEDs como motores
  ******************************************************************************/
 
@@ -77,15 +77,21 @@ long readUltrasonic() {
   return distance;
 }
 
+// ==================== SENSOR DE SOM ============================
+
+#define SOUND_SENSOR_PIN 23  // Pino do sensor de som digital
+
 // ==================== HTTP SERVER ==============================
 
 WebServer server(80);
 
 void handleRoot() {
   long dist = readUltrasonic();
+  int soundStatus = digitalRead(SOUND_SENSOR_PIN);
   String json = "{";
   json += "\"status\":\"online\",";
   json += "\"distancia\":" + String(dist) + ",";
+  json += "\"som\":" + String(soundStatus) + ",";
   json += "\"wifi_mode\":\"" + String(WiFi.getMode() == WIFI_STA ? "STA" : "AP") + "\"";
   json += "}";
   server.send(200, "application/json", json);
@@ -153,6 +159,8 @@ void setup() {
   pinMode(MOTORB_A_PIN, OUTPUT);
   pinMode(MOTORB_B_PIN, OUTPUT);
 
+  pinMode(SOUND_SENSOR_PIN, INPUT);
+
   motores_stop();
 
   connectWiFi();
@@ -174,6 +182,13 @@ void loop() {
   if (dist > 0 && dist < 15) {
     motores_stop();
     Serial.println("⚠️ Obstáculo detectado! Robô parado.");
+  }
+
+  // Sensor de som: para ao detectar som
+  if (digitalRead(SOUND_SENSOR_PIN) == HIGH) {
+    Serial.println("🔊 Som detectado!");
+    motores_stop(); // Altere para outra ação se desejar
+    delay(1000); // aguarda 1s para evitar múltiplos disparos
   }
 
   delay(50);
