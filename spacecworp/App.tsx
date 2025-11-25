@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import React, { useState } from 'react';
-import { fetchStatus, sendCommand, sendDuckSearch } from './ApiClient';
+import { fetchStatus, sendCommand } from './ApiClient';
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -41,25 +41,6 @@ export default function App() {
       setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: e.message, type: "error" }]);
     } finally {
       if (cmd === undefined) setTextToSend('');
-    }
-  }
-
-  // Função para enviar pesquisa ao endpoint Duck
-  async function handleDuckSearch() {
-    if (!isConnected) {
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Não está conectado ao ESP32-CAM.", type: "error" }]);
-      return;
-    }
-    const query = textToSend.trim();
-    if (!query) return;
-    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Pesquisando na API DUCK DUCK GO: " + query, type: "sent" }]);
-    try {
-      const resp = await sendDuckSearch(query);
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Resultado: " + resp, type: "received" }]);
-    } catch (e: any) {
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: e.message, type: "error" }]);
-    } finally {
-      setTextToSend('');
     }
   }
 
@@ -146,26 +127,6 @@ export default function App() {
             <Text style={styles.joystickText}>{joystickCommands[4].label}</Text>
           </TouchableOpacity>
         </View>
-      </View>
-
-      <View style={styles.sendRow}>
-        <TextInput
-          style={styles.textInput}
-          placeholder="Pesquisar na API DUCK DUCK GO"
-          value={textToSend}
-          onChangeText={setTextToSend}
-          editable={isConnected}
-        />
-        <TouchableOpacity
-          style={[
-            styles.sendButton,
-            textToSend.trim() && isConnected ? {} : styles.sendButtonDisabled
-          ]}
-          onPress={handleDuckSearch}
-          disabled={!textToSend.trim() || !isConnected}
-        >
-          <Text style={styles.sendButtonText}>Pesquisar</Text>
-        </TouchableOpacity>
       </View>
 
       {isConnected && (

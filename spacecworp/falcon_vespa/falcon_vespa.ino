@@ -1,7 +1,6 @@
 /*******************************************************************************
  * ESP32-CAM (Vespa) + LEDs (Motores simulados) + Ultrassônico + WiFi STA/AP + HTTP Server
  * Adaptado para controle de LEDs como motores
- * Agora com busca via DuckDuckGo Instant Answer API!
  ******************************************************************************/
 
 #include <WiFi.h>
@@ -113,53 +112,6 @@ void handleControl() {
   server.send(200, "text/plain", "OK: " + cmd);
 }
 
-// ================ ENDPOINT DE BUSCA VIA DUCKDUCKGO ==============================
-
-void handleDuckDuckGo() {
-  if (!server.hasArg("q")) {
-    server.send(400, "text/plain", "Erro: use /duck?q=pesquisa");
-    return;
-  }
-
-  String query = server.arg("q");
-  query.replace(" ", "+");
-
-  String url = "https://api.duckduckgo.com/?q=" + query + "&format=json";
-
-  HTTPClient http;
-  http.begin(url);
-  http.addHeader("User-Agent", "ESP32-CAM-Agent");  // Adiciona User-Agent customizado
-
-  int httpCode = http.GET();
-  if (httpCode > 0) {
-    if (httpCode == HTTP_CODE_OK) {
-      String resposta = http.getString();
-
-      // Try parsing with ArduinoJson
-      DynamicJsonDocument doc(4096);
-      DeserializationError error = deserializeJson(doc, resposta);
-      String resumo = "";
-      String absUrl = "";
-      if (!error) {
-        resumo = doc["Abstract"] | "";
-        absUrl = doc["AbstractURL"] | "";
-      }
-
-      String json = "{\"resumo\":\"" + resumo + "\",\"url\":\"" + absUrl + "\"}";
-      server.send(200, "application/json", json);
-      http.end();
-      return;
-    } else {
-      server.send(502, "application/json", "{\"error\": \"HTTP code: " + String(httpCode) + "\"}");
-      http.end();
-      return;
-    }
-  } else {
-    server.send(502, "application/json", "{\"error\":\"falha busca duckduckgo - conexão http\"}");
-    http.end();
-  }
-}
-
 // ==================== WiFi Logic ===============================
 
 void connectWiFi() {
@@ -207,9 +159,6 @@ void setup() {
 
   server.on("/", handleRoot);
   server.on("/cmd", handleControl);
-
-  // Endpoint DuckDuckGo usando DDG Instant Answer
-  server.on("/duck", handleDuckDuckGo);
 
   server.begin();
   Serial.println("Servidor HTTP iniciado!");
