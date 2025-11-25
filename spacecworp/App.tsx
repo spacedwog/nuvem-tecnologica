@@ -11,7 +11,7 @@ export default function App() {
   const [textToSend, setTextToSend] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Função que recarrega os dados da tela principal e do modal (pode customizar para recarregar o que quiser)
+  // Função que recarrega os dados da tela principal e do modal 
   async function handleReload() {
     setRefreshing(true);
     try {
@@ -166,13 +166,14 @@ export default function App() {
           <View style={styles.statusBox}>
             <Text>Distância (cm): <Text style={{ fontWeight: "bold" }}>{status?.distancia}</Text></Text>
             <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
+            <Text>Som detectado: <Text style={{ fontWeight: "bold" }}>{status?.som === 1 ? 'Sim' : 'Não'}</Text></Text>
           </View>
         )}
 
         <StatusBar style="auto" />
       </ScrollView>
 
-      {/* Modal do log permanece igual, também usando handleReload */}
+      {/* Modal do log */}
       <Modal
         visible={modalVisible}
         animationType="fade"
