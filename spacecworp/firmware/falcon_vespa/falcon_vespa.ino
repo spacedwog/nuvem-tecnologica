@@ -7,6 +7,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <HTTPClient.h>
+#include <ArduinoJson.h>
 
 // ===================== CONFIG WiFi ==============================
 const char* WIFI_SSID     = "FAMILIA SANTOS";
