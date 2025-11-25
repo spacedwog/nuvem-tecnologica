@@ -19,15 +19,3 @@ export async function sendCommand(cmd: string) {
     throw new Error(e.message || "Falha ao enviar comando.");
   }
 }
-
-// ATUALIZADO: Retorna todos os dados da pesquisa da API DuckDuckGo em formato bruto
-export async function sendDuckSearch(query: string | number | boolean) {
-  const response = await fetch(`${BASE_URL}/duck?q=${encodeURIComponent(query)}`);
-  try {
-    const dados = await response.json();
-    return dados; // Retorna o JSON completo!
-  }
-  catch(e){
-    throw new Error("Erro ao buscar na API Duck Go: " + e);
-  }
-}
