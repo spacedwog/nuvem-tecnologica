@@ -166,7 +166,6 @@ export default function App() {
           <View style={styles.statusBox}>
             <Text>Distância (cm): <Text style={{ fontWeight: "bold" }}>{status?.distancia}</Text></Text>
             <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
-            <Text>Som detectado: <Text style={{ fontWeight: "bold" }}>{status?.som === 1 ? 'Sim' : 'Não'}</Text></Text>
           </View>
         )}
 
