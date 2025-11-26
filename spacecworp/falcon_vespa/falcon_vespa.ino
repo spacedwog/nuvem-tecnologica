@@ -77,10 +77,6 @@ long readUltrasonic() {
   return distance;
 }
 
-// ==================== SENSOR DE SOM ============================
-
-#define SOUND_SENSOR_PIN 23  // Pino do sensor de som digital
-
 // ==================== HTTP SERVER ==============================
 
 WebServer server(80);
@@ -91,7 +87,6 @@ void handleRoot() {
   String json = "{";
   json += "\"status\":\"online\",";
   json += "\"distancia\":" + String(dist) + ",";
-  json += "\"som\":" + String(soundStatus) + ",";
   json += "\"wifi_mode\":\"" + String(WiFi.getMode() == WIFI_STA ? "STA" : "AP") + "\"";
   json += "}";
   server.send(200, "application/json", json);
@@ -182,13 +177,6 @@ void loop() {
   if (dist > 0 && dist < 15) {
     motores_stop();
     Serial.println("⚠️ Obstáculo detectado! Robô parado.");
-  }
-
-  // Sensor de som: para ao detectar som
-  if (digitalRead(SOUND_SENSOR_PIN) == HIGH) {
-    Serial.println("🔊 Som detectado!");
-    motores_stop(); // Altere para outra ação se desejar
-    delay(1000); // aguarda 1s para evitar múltiplos disparos
   }
 
   delay(50);
