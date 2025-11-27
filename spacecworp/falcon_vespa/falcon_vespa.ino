@@ -83,7 +83,6 @@ WebServer server(80);
 
 void handleRoot() {
   long dist = readUltrasonic();
-  int soundStatus = digitalRead(SOUND_SENSOR_PIN);
   String json = "{";
   json += "\"status\":\"online\",";
   json += "\"distancia\":" + String(dist) + ",";
@@ -153,8 +152,6 @@ void setup() {
   pinMode(MOTORA_B_PIN, OUTPUT);
   pinMode(MOTORB_A_PIN, OUTPUT);
   pinMode(MOTORB_B_PIN, OUTPUT);
-
-  pinMode(SOUND_SENSOR_PIN, INPUT);
 
   motores_stop();
 
