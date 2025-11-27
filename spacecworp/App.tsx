@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
 import React, { useState } from 'react';
 import { fetchStatus, sendCommand } from './ApiClient';
 
@@ -74,14 +74,6 @@ export default function App() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
-  const joystickCommands = [
-    { label: "⬆️", cmd: "forward", bg: "#5cb7f8" },
-    { label: "⬅️", cmd: "left", bg: "#92e3a9" },
-    { label: "⏹️", cmd: "stop", bg: "#ffd67f" },
-    { label: "➡️", cmd: "right", bg: "#f7be87" },
-    { label: "⬇️", cmd: "back", bg: "#f88989" },
-  ];
-
   return (
     <View style={styles.container}>
       <ScrollView
@@ -94,7 +86,7 @@ export default function App() {
           />
         }
       >
-        <Text style={styles.heading}>Controle ESP32-CAM (VESPA)</Text>
+        <Text style={styles.heading}>ESP32-CAM (VESPA)</Text>
         <Text style={[
           styles.connectionStatus,
           isConnected ? styles.connected : styles.disconnected
@@ -117,49 +109,27 @@ export default function App() {
           <Button title="Exibir log" onPress={() => setModalVisible(true)} />
         </View>
 
-        {/* JOYSTICK */}
-        <View style={styles.joystickWrapper}>
-          <View style={styles.joystickRow}>
-            <TouchableOpacity
-              onPress={() => handleSendData('forward')}
-              style={[styles.joystickButton, { backgroundColor: joystickCommands[0].bg }]}
-              disabled={!isConnected}
-            >
-              <Text style={styles.joystickText}>{joystickCommands[0].label}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.joystickRow}>
-            <TouchableOpacity
-              onPress={() => handleSendData('left')}
-              style={[styles.joystickButton, { backgroundColor: joystickCommands[1].bg }]}
-              disabled={!isConnected}
-            >
-              <Text style={styles.joystickText}>{joystickCommands[1].label}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSendData('stop')}
-              style={[styles.joystickButton, { backgroundColor: joystickCommands[2].bg }]}
-              disabled={!isConnected}
-            >
-              <Text style={styles.joystickText}>{joystickCommands[2].label}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleSendData('right')}
-              style={[styles.joystickButton, { backgroundColor: joystickCommands[3].bg }]}
-              disabled={!isConnected}
-            >
-              <Text style={styles.joystickText}>{joystickCommands[3].label}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.joystickRow}>
-            <TouchableOpacity
-              onPress={() => handleSendData('back')}
-              style={[styles.joystickButton, { backgroundColor: joystickCommands[4].bg }]}
-              disabled={!isConnected}
-            >
-              <Text style={styles.joystickText}>{joystickCommands[4].label}</Text>
-            </TouchableOpacity>
-          </View>
+        {/* ENVIAR TEXTO */}
+        <View style={styles.sendRow}>
+          <TextInput
+            style={styles.inputText}
+            value={textToSend}
+            onChangeText={setTextToSend}
+            placeholder="Digite sua mensagem"
+            editable={isConnected}
+            onSubmitEditing={() => handleSendData()}
+            returnKeyType="send"
+          />
+          <TouchableOpacity
+            onPress={() => handleSendData()}
+            style={[
+              styles.sendButton,
+              !isConnected && styles.sendButtonDisabled
+            ]}
+            disabled={!isConnected || !textToSend.trim()}
+          >
+            <Text style={styles.sendButtonText}>Enviar</Text>
+          </TouchableOpacity>
         </View>
 
         {isConnected && (
@@ -224,7 +194,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   heading: { fontSize: 20, marginBottom: 6, fontWeight: 'bold', textAlign: 'center' },
   buttonRow: { flexDirection: 'row', justifyContent: 'center', gap: 7, marginBottom: 14 },
-  sendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  sendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18, justifyContent: 'center' },
+  inputText: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#aaa',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 16,
+    marginRight: 9,
+    minWidth: 150,
+    maxWidth: 240,
+  },
   sendButton: {
     backgroundColor: '#0077ff',
     borderRadius: 8,
@@ -240,35 +222,6 @@ const styles = StyleSheet.create({
   statusBox: {
     padding: 12, marginVertical: 6, borderRadius: 10,
     backgroundColor: "#f2f9ff", alignSelf: "stretch", marginHorizontal: 12
-  },
-
-  joystickWrapper: {
-    flexDirection: 'column', alignItems: 'center', marginBottom: 20,
-  },
-  joystickRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 5,
-    gap: 9,
-  },
-  joystickButton: {
-    width: 65,
-    height: 65,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 9,
-    backgroundColor: '#eee',
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    opacity: 1,
-  },
-  joystickText: {
-    fontSize: 27,
-    fontWeight: 'bold',
-    color: '#1c1c1c',
-    textAlign: 'center'
   },
 
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center', },

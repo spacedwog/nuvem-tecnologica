@@ -1,6 +1,5 @@
 /*******************************************************************************
- * ESP32-CAM (Vespa) + LEDs (Motores simulados) + Ultrassônico + Sensor de Som + WiFi STA/AP + HTTP Server
- * Adaptado para controle de LEDs como motores
+ * ESP32-CAM (Vespa) + WiFi STA/AP + HTTP Server - Envio de mensagens
  ******************************************************************************/
 
 #include <WiFi.h>
@@ -13,50 +12,6 @@ const char* WIFI_SSID     = "FAMILIA SANTOS";
 const char* WIFI_PASSWORD = "6z2h1j3k9f";
 const char* AP_SSID = "Vespa-AP";
 const char* AP_PASSWORD = "falcon_vespa";
-
-// ===================== LEDs como Motores ========================
-// MOTOR B: D4 e D27
-// MOTOR A: D13 e D14
-
-#define MOTORB_A_PIN 4    // D4
-#define MOTORB_B_PIN 27   // D27
-#define MOTORA_A_PIN 13   // D13
-#define MOTORA_B_PIN 14   // D14
-
-void motores_stop() {
-  digitalWrite(MOTORA_A_PIN, LOW);
-  digitalWrite(MOTORA_B_PIN, LOW);
-  digitalWrite(MOTORB_A_PIN, LOW);
-  digitalWrite(MOTORB_B_PIN, LOW);
-}
-
-void motores_forward() {
-  digitalWrite(MOTORA_A_PIN, LOW);
-  digitalWrite(MOTORA_B_PIN, HIGH);
-  digitalWrite(MOTORB_A_PIN, HIGH);
-  digitalWrite(MOTORB_B_PIN, LOW);
-}
-
-void motores_backward() {
-  digitalWrite(MOTORA_A_PIN, HIGH);
-  digitalWrite(MOTORA_B_PIN, LOW);
-  digitalWrite(MOTORB_A_PIN, LOW);
-  digitalWrite(MOTORB_B_PIN, HIGH);
-}
-
-void motores_left() {
-  digitalWrite(MOTORA_A_PIN, LOW);
-  digitalWrite(MOTORA_B_PIN, LOW);    // Motor A parado
-  digitalWrite(MOTORB_A_PIN, HIGH);   // Motor B frente máximo
-  digitalWrite(MOTORB_B_PIN, LOW);
-}
-
-void motores_right() {
-  digitalWrite(MOTORA_A_PIN, LOW);
-  digitalWrite(MOTORA_B_PIN, HIGH);   // Motor A frente máximo
-  digitalWrite(MOTORB_A_PIN, LOW);
-  digitalWrite(MOTORB_B_PIN, LOW); 
-}
 
 // ==================== HTTP SERVER ==============================
 
@@ -72,23 +27,18 @@ void handleRoot() {
 
 void handleControl() {
   if (!server.hasArg("cmd")) {
-    server.send(400, "text/plain", "Erro: use /cmd?cmd=forward");
+    server.send(400, "text/plain", "Erro: use /cmd?cmd=sua_mensagem_aqui");
     return;
   }
 
   String cmd = server.arg("cmd");
 
-  if (cmd == "stop") motores_stop();
-  else if (cmd == "forward") motores_forward();
-  else if (cmd == "back") motores_backward();
-  else if (cmd == "left") motores_left();
-  else if (cmd == "right") motores_right();
-  else {
-    server.send(400, "text/plain", "Comando invalido");
-    return;
-  }
+  // Apenas imprime a mensagem recebida via cmd
+  Serial.print("Mensagem recebida via /cmd: ");
+  Serial.println(cmd);
 
-  server.send(200, "text/plain", "OK: " + cmd);
+  // Responde OK com eco da mensagem
+  server.send(200, "text/plain", "Mensagem recebida: " + cmd);
 }
 
 // ==================== WiFi Logic ===============================
@@ -123,13 +73,6 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
-
-  pinMode(MOTORA_A_PIN, OUTPUT);
-  pinMode(MOTORA_B_PIN, OUTPUT);
-  pinMode(MOTORB_A_PIN, OUTPUT);
-  pinMode(MOTORB_B_PIN, OUTPUT);
-
-  motores_stop();
 
   connectWiFi();
 
