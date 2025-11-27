@@ -1,5 +1,5 @@
 /*******************************************************************************
- * ESP32-CAM (Vespa) + WiFi STA/AP + HTTP Server - Envio de mensagens
+ * ESP32-CAM (Vespa) + WiFi STA/AP + HTTP Server - Envio de mensagens + ML
  ******************************************************************************/
 
 #include <WiFi.h>
@@ -17,6 +17,22 @@ const char* AP_PASSWORD = "falcon_vespa";
 
 WebServer server(80);
 
+// ====== ML SIMPLIFICADO - Classificador Threshold ===============
+// Simula dado de sensor e classifica em duas categorias diferentes
+
+String runSimpleML(int sensorValue) {
+  const int threshold = 60; // valor fictício
+  String resultado;
+
+  if (sensorValue > threshold) {
+    resultado = "Alta atividade detectada!";
+  } else {
+    resultado = "Baixa atividade detectada!";
+  }
+  return resultado;
+}
+
+// Handler root
 void handleRoot() {
   String json = "{";
   json += "\"status\":\"online\",";
@@ -32,10 +48,21 @@ void handleControl() {
   }
 
   String cmd = server.arg("cmd");
-
-  // Apenas imprime a mensagem recebida via cmd
   Serial.print("Mensagem recebida via /cmd: ");
   Serial.println(cmd);
+
+  // Executa ML quando ativado via comando
+  if(cmd == "voxia"){
+    // Simula leitura de sensor (substitua por real: ex. analogRead(X))
+    int sensorValue = random(0, 101);
+
+    String respostaML = runSimpleML(sensorValue);
+
+    String resposta = "Voxia ON!\nSensor=" + String(sensorValue) + ". Resultado ML: " + respostaML;
+    server.send(200, "text/plain", resposta);
+    Serial.println(resposta);
+    return;
+  }
 
   // Responde OK com eco da mensagem
   server.send(200, "text/plain", "Mensagem recebida: " + cmd);
@@ -73,12 +100,9 @@ void connectWiFi() {
 
 void setup() {
   Serial.begin(115200);
-
   connectWiFi();
-
   server.on("/", handleRoot);
   server.on("/cmd", handleControl);
-
   server.begin();
   Serial.println("Servidor HTTP iniciado!");
 }
@@ -87,6 +111,5 @@ void setup() {
 
 void loop() {
   server.handleClient();
-
   delay(50);
 }
