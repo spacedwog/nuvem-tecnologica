@@ -63,7 +63,6 @@ void motores_right() {
 WebServer server(80);
 
 void handleRoot() {
-  long dist = readUltrasonic();
   String json = "{";
   json += "\"status\":\"online\",";
   json += "\"wifi_mode\":\"" + String(WiFi.getMode() == WIFI_STA ? "STA" : "AP") + "\"";
