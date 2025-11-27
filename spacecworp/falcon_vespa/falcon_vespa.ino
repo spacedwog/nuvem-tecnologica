@@ -58,25 +58,6 @@ void motores_right() {
   digitalWrite(MOTORB_B_PIN, LOW); 
 }
 
-// ==================== ULTRASSONICO =============================
-
-#define TRIG_PIN 21
-#define ECHO_PIN 22
-
-long readUltrasonic() {
-  digitalWrite(TRIG_PIN, LOW);
-  delayMicroseconds(5);
-  digitalWrite(TRIG_PIN, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(TRIG_PIN, LOW);
-
-  long duration = pulseIn(ECHO_PIN, HIGH, 25000); // timeout 25ms
-  long distance = duration * 0.034 / 2;
-
-  if (duration == 0) return -1; // sem resposta
-  return distance;
-}
-
 // ==================== HTTP SERVER ==============================
 
 WebServer server(80);
@@ -85,7 +66,6 @@ void handleRoot() {
   long dist = readUltrasonic();
   String json = "{";
   json += "\"status\":\"online\",";
-  json += "\"distancia\":" + String(dist) + ",";
   json += "\"wifi_mode\":\"" + String(WiFi.getMode() == WIFI_STA ? "STA" : "AP") + "\"";
   json += "}";
   server.send(200, "application/json", json);
@@ -145,9 +125,6 @@ void connectWiFi() {
 void setup() {
   Serial.begin(115200);
 
-  pinMode(TRIG_PIN, OUTPUT);
-  pinMode(ECHO_PIN, INPUT);
-
   pinMode(MOTORA_A_PIN, OUTPUT);
   pinMode(MOTORA_B_PIN, OUTPUT);
   pinMode(MOTORB_A_PIN, OUTPUT);
@@ -168,13 +145,6 @@ void setup() {
 
 void loop() {
   server.handleClient();
-
-  // Segurança: para o robô se um objeto estiver muito perto
-  long dist = readUltrasonic();
-  if (dist > 0 && dist < 15) {
-    motores_stop();
-    Serial.println("⚠️ Obstáculo detectado! Robô parado.");
-  }
 
   delay(50);
 }

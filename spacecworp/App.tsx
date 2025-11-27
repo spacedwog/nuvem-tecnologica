@@ -20,7 +20,7 @@ export default function App() {
         setStatus(s);
         setLog((prev) => [
           ...prev,
-          { time: new Date().toLocaleTimeString(), msg: "Status atualizado! Distância: " + s.distancia + "cm", type: "info" }
+          { time: new Date().toLocaleTimeString(), msg: "Status atualizado!", type: "info" }
         ]);
       } else {
         setLog((prev) => [
@@ -42,7 +42,7 @@ export default function App() {
       setIsConnected(true);
       setLog((prev) => [
         ...prev,
-        { time: new Date().toLocaleTimeString(), msg: "Conectado! Distância: " + s.distancia + "cm", type: "success" }
+        { time: new Date().toLocaleTimeString(), msg: "Conectado!", type: "success" }
       ]);
     } catch (e: any) {
       setIsConnected(false);
@@ -164,7 +164,6 @@ export default function App() {
 
         {isConnected && (
           <View style={styles.statusBox}>
-            <Text>Distância (cm): <Text style={{ fontWeight: "bold" }}>{status?.distancia}</Text></Text>
             <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
           </View>
         )}
