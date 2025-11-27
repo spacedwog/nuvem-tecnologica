@@ -1,7 +1,20 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { fetchStatus, sendCommand } from './ApiClient';
+
+// Função para buscar notificações do ESP32-CAM (endpoint /notify ou similar)
+async function fetchNotifications() {
+  // Troque para o endereço correto do seu ESP32-CAM + endpoint
+  const url = 'http://192.168.15.3:80/notify';
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    return await resp.json(); // Expects array: [{ time, msg, type }]
+  } catch (e) {
+    return [];
+  }
+}
 
 export default function App() {
   const [modalVisible, setModalVisible] = useState(false);
@@ -11,7 +24,37 @@ export default function App() {
   const [textToSend, setTextToSend] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
-  // Função que recarrega os dados da tela principal e do modal 
+  const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
+
+  // Poll para notificações automáticas do ESP32-CAM enquanto conectado
+  useEffect(() => {
+    async function pollNotifications() {
+      if (!isConnected) return;
+      const notifs = await fetchNotifications();
+      if (!Array.isArray(notifs)) return;
+      setLog(prev => {
+        // Adiciona ao log apenas notificações novas
+        const allTimes = new Set(prev.map(l => l.time + l.msg));
+        const news = notifs.filter((n: any) => !allTimes.has(n.time + n.msg));
+        if (news.length === 0) return prev;
+        return [...prev, ...news.map(n => ({
+          time: n.time ?? new Date().toLocaleTimeString(),
+          msg: n.msg,
+          type: n.type ?? 'notify',
+        }))];
+      });
+    }
+
+    if (isConnected) {
+      notificationsPolling.current = setInterval(pollNotifications, 2000);
+    } else if (notificationsPolling.current) {
+      clearInterval(notificationsPolling.current);
+    }
+    return () => {
+      if (notificationsPolling.current) clearInterval(notificationsPolling.current);
+    }
+  }, [isConnected]);
+
   async function handleReload() {
     setRefreshing(true);
     try {
@@ -173,6 +216,7 @@ export default function App() {
                       item.type === "received" && styles.received,
                       item.type === "info" && styles.info,
                       item.type === "closed" && styles.closed,
+                      item.type === "notify" && styles.notify,
                     ]}
                   >
                     [{item.time}] {item.msg}
@@ -262,4 +306,5 @@ const styles = StyleSheet.create({
   info: { color: '#407f71' },
   closed: { color: '#555' },
   success: { color: '#079b31' },
+  notify: { color: "#c97806", fontStyle: "italic", fontWeight: "bold" },
 });
