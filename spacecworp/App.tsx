@@ -14,7 +14,7 @@ import {
   Animated,
   KeyboardAvoidingView,
   Platform,
-  Dimensions
+  Dimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -115,7 +115,6 @@ const MODAL_PAGES = [
   "extra"
 ];
 
-// Monta os dados para os modais a partir das funcionalidades da ReceitaWS
 function getModalPagesData(cnpjDados: any) {
   return [
     {
@@ -223,7 +222,6 @@ function getModalPagesData(cnpjDados: any) {
   ];
 }
 
-// COMPONENTE PRINCIPAL
 export default function App() {
   // Estados padrão
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -233,16 +231,12 @@ export default function App() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [cnpjDados, setCnpjDados] = useState<any | null>(null);
 
-  // Animações empresariais
-  const logoAnim = useRef(new Animated.Value(0)).current;
-  const cardAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
   // Modal de consulta CNPJ paginado
   const [modalPage, setModalPage] = useState(0);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [modalCnpjVisible, setModalCnpjVisible] = useState(false);
+  // Modal de log VESPA
+  const [modalLogVisible, setModalLogVisible] = useState(false);
 
-  // Main app states
   const [log, setLog] = useState<{ time: string; msg: string; type?: string }[]>([]);
   const [status, setStatus] = useState<any>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -250,20 +244,14 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(logoAnim, {
-        toValue: 1,
-        duration: 950,
-        useNativeDriver: true,
-      }),
-      Animated.spring(cardAnim, {
-        toValue: 1,
-        useNativeDriver: true,
-        friction: 8,
-        tension: 60,
-        delay: 500
-      }),
+      Animated.timing(logoAnim, { toValue: 1, duration: 950, useNativeDriver: true }),
+      Animated.spring(cardAnim, { toValue: 1, useNativeDriver: true, friction: 8, tension: 60, delay: 500 }),
     ]).start();
   }, []);
 
@@ -288,7 +276,6 @@ export default function App() {
     setCnpjDados(null);
   }
 
-  // Login usando consulta da ReceitaWS
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -304,14 +291,8 @@ export default function App() {
       setCnpjDados(dados);
       setSuccessMsg('Login realizado com sucesso!');
       setIsLoading(false);
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }).start();
-      setTimeout(() => {
-        setIsLoggedIn(true);
-      }, 900);
+      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+      setTimeout(() => setIsLoggedIn(true), 900);
     } catch (e: any) {
       setErrorMsg('CNPJ não encontrado ou inválido! ' + e.message);
       setCnpjDados(null);
@@ -319,23 +300,17 @@ export default function App() {
     }
   }
 
-  // --- Modal de consulta de CNPJ paginado ---
+  // Modal controle
   function openModalPage(page: number = 0) {
     setModalPage(page);
-    setModalVisible(true);
+    setModalCnpjVisible(true);
   }
-  function nextModalPage() {
-    setModalPage((p) => Math.min(p+1, MODAL_PAGES.length-1));
-  }
-  function prevModalPage() {
-    setModalPage((p) => Math.max(p-1, 0));
-  }
-  function closeModalPage() {
-    setModalVisible(false);
-    setModalPage(0);
-  }
+  function nextModalPage() { setModalPage((p) => Math.min(p+1, MODAL_PAGES.length-1)); }
+  function prevModalPage() { setModalPage((p) => Math.max(p-1, 0)); }
+  function closeModalPage() { setModalCnpjVisible(false); setModalPage(0); }
+  function openModalLog() { setModalLogVisible(true); }
+  function closeModalLog() { setModalLogVisible(false); }
 
-  // Main app logic
   useEffect(() => {
     async function pollNotifications() {
       if (!isConnected) return;
@@ -424,7 +399,6 @@ export default function App() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
-  // ----------- Login empresarial via CNPJ -----------
   if (!isLoggedIn) {
     return (
       <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -488,7 +462,6 @@ export default function App() {
     );
   }
 
-  // --- Seu app principal ---
   const modalPagesData = cnpjDados ? getModalPagesData(cnpjDados) : [];
 
   return (
@@ -523,7 +496,7 @@ export default function App() {
             color={isConnected ? '#d60000' : 'gray'}
             disabled={!isConnected}
           />
-          <Button title="Exibir log" onPress={() => setModalVisible(true)} />
+          <Button title="Exibir log" onPress={openModalLog} />
         </View>
         <View style={styles.sendRow}>
           <TextInput
@@ -551,8 +524,7 @@ export default function App() {
             <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
           </View>
         )}
-        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {cnpjDados.fantasia}</Text>
-
+        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {cnpjDados?.fantasia || cnpj}</Text>
         {cnpjDados && (
           <TouchableOpacity
             style={styles.cnpjButton}
@@ -564,7 +536,6 @@ export default function App() {
             </Text>
           </TouchableOpacity>
         )}
-
         <TouchableOpacity
           style={{
             marginTop: 16,
@@ -584,7 +555,7 @@ export default function App() {
       {/* Modal paginado com dados do CNPJ */}
       {cnpjDados && (
       <Modal
-        visible={modalVisible}
+        visible={modalCnpjVisible}
         animationType="slide"
         transparent
         onRequestClose={closeModalPage}>
@@ -624,17 +595,18 @@ export default function App() {
       </Modal>
       )}
 
-      {/* Modal antigo (LOG) permanece igual */}
+      {/* Modal de LOG - só dados do VESPA, completamente separado do modal de CNPJ */}
       <Modal
-        visible={modalVisible && !cnpjDados}
+        visible={modalLogVisible}
         animationType="fade"
         transparent
-        onRequestClose={() => setModalVisible(false)}>
+        onRequestClose={closeModalLog}
+      >
         <View style={styles.modalOverlay}>
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Log</Text>
+            <Text style={styles.cardTitle}>Log - Informações do VESPA</Text>
             <ScrollView
-              style={styles.logContainer}
+              style={[styles.logContainer, { minHeight: 120 }]}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
@@ -643,6 +615,27 @@ export default function App() {
                 />
               }
             >
+              {/* Mostra status do VESPA */}
+              {status && (
+                <>
+                  <Text style={styles.logText}>
+                    <Text style={{ fontWeight: 'bold' }}>Modo WiFi:</Text> {status.wifi_mode}
+                  </Text>
+                  <Text style={styles.logText}>
+                    <Text style={{ fontWeight: 'bold' }}>SSID:</Text> {status.ssid || "-"}
+                  </Text>
+                  <Text style={styles.logText}>
+                    <Text style={{ fontWeight: 'bold' }}>IP:</Text> {status.ip || "-"}
+                  </Text>
+                  <Text style={styles.logText}>
+                    <Text style={{ fontWeight: 'bold' }}>MAC:</Text> {status.mac || "-"}
+                  </Text>
+                  <Text style={styles.logText}>
+                    <Text style={{ fontWeight: 'bold' }}>Status hardware:</Text> {status.status_hw || "-"}
+                  </Text>
+                </>
+              )}
+              <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 7, marginTop: 18 }]}>Eventos:</Text>
               {log.length === 0 ? (
                 <Text style={styles.emptyText}>Nenhum evento ainda</Text>
               ) : (
@@ -664,7 +657,7 @@ export default function App() {
                 ))
               )}
             </ScrollView>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setModalVisible(false)}>
+            <TouchableOpacity style={styles.closeButton} onPress={closeModalLog}>
               <Text style={styles.closeButtonText}>Fechar</Text>
             </TouchableOpacity>
           </View>
@@ -674,7 +667,6 @@ export default function App() {
   );
 }
 
-// --- STYLES ---
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
   loginCard: {
