@@ -1,21 +1,42 @@
-import React, { useState, useRef } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  NavigationContainer
+} from '@react-navigation/native';
+import {
+  createStackNavigator
+} from '@react-navigation/stack';
+import {
+  StyleSheet,
+  Text,
+  View,
+  Button,
+  Modal,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  TextInput,
+  Alert,
+  ActivityIndicator,
+  Animated,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, RefreshControl, TextInput, Alert } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { fetchStatus, sendCommand } from './ApiClient';
 
-const API_ENDPOINT = 'http://localhost:3000/api/login-cnpj'; // Altere para seu endpoint real
+// Ajuste sua API real aqui:
+const API_ENDPOINT = 'http://localhost:3000/api/login-cnpj';
 const CNPJ_PERMITIDO = "62.904.267/0001-60";
+const BASE_URL = "http://192.168.15.3:80"; // Esp32-CAM
 
-type RootStackParamList = {
+export type RootStackParamList = {
   Login: undefined;
   AppMain: { cnpj: string };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+// ----------------- Utils -------------------
 function maskCNPJ(text: string): string {
   let v = text.replace(/\D/g, '');
   v = v.slice(0, 14);
@@ -64,36 +85,65 @@ async function autenticaCNPJ(cnpj: string): Promise<boolean> {
     const json = await resp.json();
     return json.autorizado === true;
   } catch {
-    return cnpj === CNPJ_PERMITIDO; // Simulação fallback
+    return cnpj === CNPJ_PERMITIDO;
   }
 }
 
+// ----------------- APIClient -------------------
+export async function fetchStatus(): Promise<any> {
+  try {
+    const res = await fetch(`${BASE_URL}/`);
+    if (!res.ok) throw new Error("Resposta inválida do ESP32-CAM.");
+    return await res.json();
+  } catch (e) {
+    throw new Error("Não foi possível conectar ao ESP32-CAM.");
+  }
+}
+
+export async function sendCommand(cmd: string): Promise<string> {
+  try {
+    const res = await fetch(`${BASE_URL}/cmd?cmd=${encodeURIComponent(cmd)}`);
+    if (!res.ok) throw new Error(await res.text());
+    return await res.text();
+  } catch (e: any) {
+    throw new Error(e.message || "Falha ao enviar comando.");
+  }
+}
+
+async function fetchNotifications(): Promise<{ time: string; msg: string; type?: string }[]> {
+  const url = `${BASE_URL}/notify`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    return await resp.json();
+  } catch (e) {
+    return [];
+  }
+}
+
+// ----------------- LoginScreen -------------------
 function LoginScreen({ navigation }: { navigation: any }) {
   const [cnpj, setCnpj] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-
-  const fadeAnim = useRef(new globalThis.Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   function handleChangeCNPJ(text: string) {
     setErrorMsg(null);
     setSuccessMsg(null);
     setCnpj(maskCNPJ(text));
   }
-
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
     setIsLoading(true);
     fadeAnim.setValue(0);
-
     if (!validateCNPJ(cnpj)) {
       setErrorMsg('CNPJ inválido');
       setIsLoading(false);
       return;
     }
-
     try {
       const autorizado = await autenticaCNPJ(cnpj);
       setIsLoading(false);
@@ -102,12 +152,11 @@ function LoginScreen({ navigation }: { navigation: any }) {
         return;
       }
       setSuccessMsg('Login realizado com sucesso!');
-      globalThis.Animated.timing(fadeAnim, {
+      Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 350,
         useNativeDriver: true,
       }).start();
-
       setTimeout(() => {
         navigation.replace('AppMain', { cnpj });
       }, 900);
@@ -116,9 +165,8 @@ function LoginScreen({ navigation }: { navigation: any }) {
       setIsLoading(false);
     }
   }
-
   return (
-    <View style={loginStyles.loginBg}>
+    <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={loginStyles.loginCard}>
         <MaterialIcons name="business" size={38} color="#3182ce" style={{ marginBottom: 13 }} />
         <Text style={loginStyles.loginTitle}>Login - Empresa</Text>
@@ -148,26 +196,35 @@ function LoginScreen({ navigation }: { navigation: any }) {
             : <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>Entrar</Text>}
         </TouchableOpacity>
         {errorMsg && <Text style={loginStyles.errorMsg}>{errorMsg}</Text>}
-        {successMsg && <globalThis.Animated.Text style={[loginStyles.successMsg, { opacity: fadeAnim }]}>{successMsg}</globalThis.Animated.Text>}
+        {successMsg && <Animated.Text style={[loginStyles.successMsg, { opacity: fadeAnim }]}>{successMsg}</Animated.Text>}
         <View style={{ marginTop: 16 }}>
           <Text style={{ color: '#999' }}>CNPJ autorizado: {CNPJ_PERMITIDO}</Text>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
-async function fetchNotifications() {
-  const url = 'http://192.168.15.3:80/notify';
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) return [];
-    return await resp.json();
-  } catch (e) {
-    return [];
-  }
-}
+const loginStyles = StyleSheet.create({
+  loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
+  loginCard: {
+    width: '92%', maxWidth: 400,
+    backgroundColor: '#fff',
+    borderRadius: 18, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.23, shadowRadius: 14, elevation: 14,
+    alignItems: 'center'
+  },
+  loginTitle: { fontSize: 24, fontWeight: 'bold', color: '#3182ce', marginBottom: 3 },
+  loginSubtitle: { fontSize: 14, color: '#666', marginBottom: 17 },
+  inputArea: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: '#f5f7fc', borderRadius: 10, marginBottom: 11, borderWidth: 1, borderColor: '#cde3fa', paddingHorizontal: 9 },
+  inputCnpj: { flex: 1, fontSize: 17, paddingVertical: 11, color: '#23292e' },
+  buttonEntrar: { width: '100%', backgroundColor: '#3182ce', borderRadius: 10, alignItems: 'center', paddingVertical: 15, marginTop: 7, elevation: 2 },
+  errorMsg: { color: '#d60000', fontWeight: 'bold', marginTop: 14 },
+  successMsg: { color: '#328d3f', fontWeight: 'bold', marginTop: 14, fontSize: 17 },
+});
 
+// ----------------- AppMain -------------------
 function AppMain({ navigation, route }: any) {
   const { cnpj } = route.params;
   const [modalVisible, setModalVisible] = useState(false);
@@ -176,15 +233,12 @@ function AppMain({ navigation, route }: any) {
   const [isConnected, setIsConnected] = useState(false);
   const [textToSend, setTextToSend] = useState('');
   const [refreshing, setRefreshing] = useState(false);
-
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
   function handleLogout() {
     Alert.alert("Logout", "Deseja sair do aplicativo?", [
       { text: "Cancelar", style: "cancel" },
-      { text: "Sair", style: "destructive", onPress: () => {
-        navigation.replace('Login');
-      }}
+      { text: "Sair", style: "destructive", onPress: () => { navigation.replace('Login'); } }
     ]);
   }
 
@@ -339,7 +393,6 @@ function AppMain({ navigation, route }: any) {
         )}
 
         <Text style={{ color: "#aaa", marginTop: 10 }}>CNPJ logado: {cnpj}</Text>
-
         <TouchableOpacity
           style={{
             marginTop: 16,
@@ -353,7 +406,6 @@ function AppMain({ navigation, route }: any) {
         >
           <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Logout</Text>
         </TouchableOpacity>
-
         <StatusBar style="auto" />
       </ScrollView>
       <Modal
@@ -405,6 +457,7 @@ function AppMain({ navigation, route }: any) {
   );
 }
 
+// ----------------- EXPORT ROOT -------------------
 export default function App() {
   return (
     <NavigationContainer>
@@ -416,24 +469,7 @@ export default function App() {
   );
 }
 
-const loginStyles = StyleSheet.create({
-  loginBg: {flex:1, justifyContent:'center', alignItems:'center', backgroundColor:'#eaf1fb'},
-  loginCard: {
-    width:'92%', maxWidth:400,
-    backgroundColor:'#fff',
-    borderRadius:18, padding:24,
-    shadowColor:'#000', shadowOffset:{width:0,height:8},
-    shadowOpacity:0.23, shadowRadius:14, elevation:14,
-    alignItems:'center'
-  },
-  loginTitle: {fontSize:24, fontWeight:'bold', color:'#3182ce', marginBottom:3},
-  loginSubtitle: {fontSize:14, color:'#666', marginBottom:17},
-  inputArea: {flexDirection:'row', alignItems:'center', width:'100%', backgroundColor:'#f5f7fc', borderRadius:10,marginBottom:11,borderWidth:1, borderColor:'#cde3fa', paddingHorizontal:9},
-  inputCnpj: {flex:1, fontSize:17, paddingVertical:11, color:'#23292e'},
-  buttonEntrar: {width:'100%', backgroundColor:'#3182ce', borderRadius:10, alignItems:'center', paddingVertical:15, marginTop:7, elevation:2},
-  errorMsg: {color:'#d60000', fontWeight:'bold', marginTop:14},
-  successMsg: {color:'#328d3f', fontWeight:'bold', marginTop:14, fontSize:17},
-});
+// ----------------- Styles -------------------
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
@@ -459,9 +495,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     elevation: 2,
   },
-  sendButtonDisabled: {
-    opacity: 0.5,
-  },
+  sendButtonDisabled: { opacity: 0.5 },
   sendButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   statusBox: {
     padding: 12, marginVertical: 6, borderRadius: 10,
