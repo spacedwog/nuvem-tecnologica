@@ -419,8 +419,18 @@ export default function App() {
 
             <Text style={{ fontWeight: "bold", marginTop: 4 }}>Situação:</Text>
             <Text>{cnpjDados.situacao}</Text>
+
             <Text style={{ fontWeight: "bold", marginTop: 4 }}>Atividade principal:</Text>
             <Text>{cnpjDados.atividade_principal?.[0]?.text}</Text>
+
+            <Text style={{ fontWeight: "bold", marginTop: 4 }}>CNAE:</Text>
+            <Text>
+              {cnpjDados.atividade_principal?.[0]?.code 
+                ? `${cnpjDados.atividade_principal[0].code} - ${cnpjDados.atividade_principal[0].text}`
+                : '-'
+              }
+            </Text>
+
             <Text style={{ fontWeight: "bold", marginTop: 4 }}>Tipo:</Text>
             <Text>{cnpjDados.tipo}</Text>
             <Text style={{ fontWeight: "bold", marginTop: 4 }}>Natureza jurídica:</Text>
