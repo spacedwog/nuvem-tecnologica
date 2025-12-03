@@ -38,11 +38,40 @@ struct Pin33Notify {
   String lastMessage = "";
 } pin33Notify;
 
+// ========== Função para retornar SSID, IP, MAC, Status hardware ==========
+String getWiFiMode() {
+  return String(WiFi.getMode() == WIFI_STA ? "STA" : "AP");
+}
+
+String getSSID() {
+  if (WiFi.getMode() == WIFI_STA) return WiFi.SSID();
+  else return AP_SSID;
+}
+
+String getIP() {
+  if (WiFi.getMode() == WIFI_STA) return WiFi.localIP().toString();
+  else return WiFi.softAPIP().toString();
+}
+
+String getMAC() {
+  if (WiFi.getMode() == WIFI_STA) return WiFi.BSSIDstr();
+  else return WiFi.softAPmacAddress();
+}
+
+String getStatusHW() {
+  // Adapte conforme sensores/hardware reais
+  return "OK"; // Para exemplo, sempre OK
+}
+
 // Handler root
 void handleRoot() {
   String json = "{";
   json += "\"status\":\"online\",";
-  json += "\"wifi_mode\":\"" + String(WiFi.getMode() == WIFI_STA ? "STA" : "AP") + "\"";
+  json += "\"wifi_mode\":\"" + getWiFiMode() + "\",";
+  json += "\"ssid\":\"" + getSSID() + "\",";
+  json += "\"ip\":\"" + getIP() + "\",";
+  json += "\"mac\":\"" + getMAC() + "\",";
+  json += "\"status_hw\":\"" + getStatusHW() + "\"";
   json += "}";
   server.send(200, "application/json", json);
 }
@@ -161,7 +190,7 @@ void setup() {
   server.on("/", handleRoot);
   server.on("/cmd", handleControl);
   server.on("/notify", handleNotify);
-  server.on("/api/login-cnpj", HTTP_POST, handleLoginCNPJ); // <-- Novo endpoint
+  server.on("/api/login-cnpj", HTTP_POST, handleLoginCNPJ);
   server.begin();
   Serial.println("Servidor HTTP iniciado!");
   pin33Notify.lastValue = analogRead(33);
