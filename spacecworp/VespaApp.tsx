@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
+import { StyleSheet, Text, View, Button, Modal, ScrollView, TouchableOpacity, RefreshControl, TextInput, Alert } from 'react-native';
 import { fetchStatus, sendCommand } from './ApiClient';
 
 type Props = { cnpj?: string };
 
+// Função para buscar notificações do ESP32-CAM (endpoint /notify ou similar)
 async function fetchNotifications() {
   const url = 'http://192.168.15.3:80/notify';
   try {
     const resp = await fetch(url);
     if (!resp.ok) return [];
-    return await resp.json();
+    return await resp.json(); // Expects array: [{ time, msg, type }]
   } catch (e) {
     return [];
   }
@@ -25,6 +26,23 @@ export default function VespaApp(props: Props) {
   const [refreshing, setRefreshing] = useState(false);
 
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
+
+  // Função de logout para navegação react-navigation
+  function handleLogout() {
+    Alert.alert("Logout", "Deseja sair do aplicativo?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sair", style: "destructive", onPress: () => {
+        // Para o logout, navegue para LoginScreen pelo parent Navigator.
+        // Preencha corretamente conforme navegação (navigation prop), exemplo:
+        // props.navigation.replace('Login');
+        // Caso navegação não venha por prop, pode utilizar um evento customizado
+        // Exemplo usando um workaround global:
+        if(globalThis.__nav && typeof globalThis.__nav.replace === "function"){
+          globalThis.__nav.replace('Login');
+        }
+      }}
+    ]);
+  }
 
   useEffect(() => {
     async function pollNotifications() {
@@ -178,6 +196,20 @@ export default function VespaApp(props: Props) {
         )}
 
         <Text style={{ color: "#aaa", marginTop: 10 }}>CNPJ logado: {props.cnpj}</Text>
+        <TouchableOpacity
+          style={{
+            marginTop: 16,
+            backgroundColor: '#E53E3E',
+            paddingHorizontal: 30,
+            paddingVertical: 10,
+            borderRadius: 8,
+            alignSelf: 'center',
+          }}
+          onPress={handleLogout}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Logout</Text>
+        </TouchableOpacity>
+
         <StatusBar style="auto" />
       </ScrollView>
       <Modal

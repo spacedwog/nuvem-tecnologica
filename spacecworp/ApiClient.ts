@@ -1,5 +1,5 @@
 // Cliente HTTP para ESP32-CAM (vespa)
-const BASE_URL = "http://192.168.15.3:80"; // STM32-CAM endereço local Wi-Fi STA
+const BASE_URL = "http://192.168.15.6:80"; // STM32-CAM endereço local Wi-Fi STA
 
 export async function fetchStatus() {
   try {
