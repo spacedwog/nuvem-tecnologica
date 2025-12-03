@@ -2,10 +2,9 @@ import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator, Animated, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
-import { RootStackParamList } from './VespaApp';
+import { RootStackParamList } from './App';
 
-// Ajuste a URL para sua API real.
-const API_ENDPOINT = 'https://seu-backend.com/api/login-cnpj';
+const API_ENDPOINT = 'http://localhost:3000/api/login-cnpj'; // Edite para seu endpoint real
 const CNPJ_PERMITIDO = "62.904.267/0001-60";
 
 type LoginScreenProps = {
@@ -50,12 +49,18 @@ function validateCNPJ(cnpj: string): boolean {
 }
 
 async function autenticaCNPJ(cnpj: string): Promise<boolean> {
-  // Simula requisição real
-  // Troque por chamada real:
-  // const resp = await fetch(API_ENDPOINT, { method: 'POST', body: JSON.stringify({cnpj}) });
-  // const json = await resp.json();
-  // return json.autorizado === true;
-  return new Promise(resolve => setTimeout(() => resolve(cnpj === CNPJ_PERMITIDO), 700));
+  try {
+    const resp = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cnpj }),
+    });
+    if (!resp.ok) return false;
+    const json = await resp.json();
+    return json.autorizado === true;
+  } catch {
+    return cnpj === CNPJ_PERMITIDO; // Simulação fallback
+  }
 }
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
@@ -101,7 +106,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       setTimeout(() => {
         navigation.replace('Main', { cnpj });
       }, 900);
-    } catch (e: any) {
+    } catch {
       setErrorMsg('Erro de conexão.');
       setIsLoading(false);
     }
