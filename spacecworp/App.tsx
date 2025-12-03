@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  NavigationContainer
-} from '@react-navigation/native';
-import {
-  createStackNavigator
-} from '@react-navigation/stack';
-import {
   StyleSheet,
   Text,
   View,
@@ -19,24 +13,15 @@ import {
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
-  Platform,
+  Platform
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// Ajuste sua API real aqui:
-const API_ENDPOINT = 'http://localhost:3000/api/login-cnpj';
+const API_ENDPOINT = 'http://192.168.15.6:80/api/login-cnpj';
 const CNPJ_PERMITIDO = "62.904.267/0001-60";
-const BASE_URL = "http://192.168.15.3:80"; // Esp32-CAM
+const BASE_URL = "http://192.168.15.6:80";
 
-export type RootStackParamList = {
-  Login: undefined;
-  AppMain: { cnpj: string };
-};
-
-const Stack = createStackNavigator<RootStackParamList>();
-
-// ----------------- Utils -------------------
 function maskCNPJ(text: string): string {
   let v = text.replace(/\D/g, '');
   v = v.slice(0, 14);
@@ -89,8 +74,7 @@ async function autenticaCNPJ(cnpj: string): Promise<boolean> {
   }
 }
 
-// ----------------- APIClient -------------------
-export async function fetchStatus(): Promise<any> {
+async function fetchStatus(): Promise<any> {
   try {
     const res = await fetch(`${BASE_URL}/`);
     if (!res.ok) throw new Error("Resposta inválida do ESP32-CAM.");
@@ -100,7 +84,7 @@ export async function fetchStatus(): Promise<any> {
   }
 }
 
-export async function sendCommand(cmd: string): Promise<string> {
+async function sendCommand(cmd: string): Promise<string> {
   try {
     const res = await fetch(`${BASE_URL}/cmd?cmd=${encodeURIComponent(cmd)}`);
     if (!res.ok) throw new Error(await res.text());
@@ -121,19 +105,67 @@ async function fetchNotifications(): Promise<{ time: string; msg: string; type?:
   }
 }
 
-// ----------------- LoginScreen -------------------
-function LoginScreen({ navigation }: { navigation: any }) {
+export default function App() {
+  // Login states
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cnpj, setCnpj] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // Animações empresariais
+  const logoAnim = useRef(new Animated.Value(0)).current; // Logo começa "oculto"
+  const cardAnim = useRef(new Animated.Value(0)).current; // Card translada de baixo
+  const fadeAnim = useRef(new Animated.Value(0)).current; // Sucesso fade
+
+  useEffect(() => {
+    // Entrada animada da logo e do card de login
+    Animated.parallel([
+      Animated.timing(logoAnim, {
+        toValue: 1,
+        duration: 950,
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        friction: 8,
+        tension: 60,
+        delay: 500
+      }),
+    ]).start();
+  }, []);
+
+  // Main app states
+  const [modalVisible, setModalVisible] = useState(false);
+  const [log, setLog] = useState<{ time: string; msg: string; type?: string }[]>([]);
+  const [status, setStatus] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [textToSend, setTextToSend] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
+
+  // Logout function
+  function handleLogout() {
+    Alert.alert("Logout", "Deseja sair do aplicativo?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sair", style: "destructive", onPress: () => {
+        setIsLoggedIn(false);
+        setCnpj('');
+        setIsConnected(false);
+        setStatus(null);
+        setLog([]);
+      } }
+    ]);
+  }
+
+  // Login logic
   function handleChangeCNPJ(text: string) {
     setErrorMsg(null);
     setSuccessMsg(null);
     setCnpj(maskCNPJ(text));
   }
+
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -154,94 +186,19 @@ function LoginScreen({ navigation }: { navigation: any }) {
       setSuccessMsg('Login realizado com sucesso!');
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 350,
+        duration: 500,
         useNativeDriver: true,
       }).start();
       setTimeout(() => {
-        navigation.replace('AppMain', { cnpj });
+        setIsLoggedIn(true);
       }, 900);
     } catch {
       setErrorMsg('Erro de conexão.');
       setIsLoading(false);
     }
   }
-  return (
-    <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={loginStyles.loginCard}>
-        <MaterialIcons name="business" size={38} color="#3182ce" style={{ marginBottom: 13 }} />
-        <Text style={loginStyles.loginTitle}>Login - Empresa</Text>
-        <Text style={loginStyles.loginSubtitle}>Acesso restrito via CNPJ</Text>
-        <View style={loginStyles.inputArea}>
-          <Ionicons name="key-outline" size={22} color="#5072b7" style={{ marginRight: 7 }} />
-          <TextInput
-            style={loginStyles.inputCnpj}
-            value={cnpj}
-            keyboardType="numeric"
-            placeholder="CNPJ (XX.XXX.XXX/XXXX-XX)"
-            onChangeText={handleChangeCNPJ}
-            maxLength={18}
-            editable={!isLoading}
-            returnKeyType="done"
-            autoCapitalize="none"
-          />
-        </View>
-        <TouchableOpacity
-          style={loginStyles.buttonEntrar}
-          activeOpacity={0.7}
-          onPress={loginCNPJ}
-          disabled={isLoading || cnpj.length < 18}
-        >
-          {isLoading
-            ? <ActivityIndicator color="#fff" size="small" />
-            : <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>Entrar</Text>}
-        </TouchableOpacity>
-        {errorMsg && <Text style={loginStyles.errorMsg}>{errorMsg}</Text>}
-        {successMsg && <Animated.Text style={[loginStyles.successMsg, { opacity: fadeAnim }]}>{successMsg}</Animated.Text>}
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ color: '#999' }}>CNPJ autorizado: {CNPJ_PERMITIDO}</Text>
-        </View>
-      </View>
-    </KeyboardAvoidingView>
-  );
-}
 
-const loginStyles = StyleSheet.create({
-  loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
-  loginCard: {
-    width: '92%', maxWidth: 400,
-    backgroundColor: '#fff',
-    borderRadius: 18, padding: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.23, shadowRadius: 14, elevation: 14,
-    alignItems: 'center'
-  },
-  loginTitle: { fontSize: 24, fontWeight: 'bold', color: '#3182ce', marginBottom: 3 },
-  loginSubtitle: { fontSize: 14, color: '#666', marginBottom: 17 },
-  inputArea: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: '#f5f7fc', borderRadius: 10, marginBottom: 11, borderWidth: 1, borderColor: '#cde3fa', paddingHorizontal: 9 },
-  inputCnpj: { flex: 1, fontSize: 17, paddingVertical: 11, color: '#23292e' },
-  buttonEntrar: { width: '100%', backgroundColor: '#3182ce', borderRadius: 10, alignItems: 'center', paddingVertical: 15, marginTop: 7, elevation: 2 },
-  errorMsg: { color: '#d60000', fontWeight: 'bold', marginTop: 14 },
-  successMsg: { color: '#328d3f', fontWeight: 'bold', marginTop: 14, fontSize: 17 },
-});
-
-// ----------------- AppMain -------------------
-function AppMain({ navigation, route }: any) {
-  const { cnpj } = route.params;
-  const [modalVisible, setModalVisible] = useState(false);
-  const [log, setLog] = useState<{ time: string; msg: string; type?: string }[]>([]);
-  const [status, setStatus] = useState<any>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [textToSend, setTextToSend] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
-
-  function handleLogout() {
-    Alert.alert("Logout", "Deseja sair do aplicativo?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Sair", style: "destructive", onPress: () => { navigation.replace('Login'); } }
-    ]);
-  }
-
+  // Main app logic
   useEffect(() => {
     async function pollNotifications() {
       if (!isConnected) return;
@@ -330,6 +287,77 @@ function AppMain({ navigation, route }: any) {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
+  if (!isLoggedIn) {
+    return (
+      <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* animação empresarial */}
+        <Animated.View style={{
+          opacity: logoAnim,
+          transform: [{
+            scale: logoAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.85, 1],
+            }),
+          }]
+        }}>
+          <View style={loginStyles.logoArea}>
+            {/* Você pode substituir por um SVG/Icon mais "corporativo" */}
+            <MaterialIcons name="account-balance" size={57} color="#3182ce" />
+            <Text style={loginStyles.empresaText}>Spacecworp</Text>
+          </View>
+        </Animated.View>
+        <Animated.View
+          style={{
+            transform: [{
+              translateY: cardAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [70, 0]
+              })
+            }],
+            opacity: cardAnim,
+            width: '100%'
+          }}>
+          <View style={loginStyles.loginCard}>
+            <Text style={loginStyles.loginTitle}>Login Empresarial</Text>
+            <Text style={loginStyles.loginSubtitle}>Acesso restrito via CNPJ</Text>
+            <View style={loginStyles.inputArea}>
+              <Ionicons name="key-outline" size={22} color="#5072b7" style={{ marginRight: 7 }} />
+              <TextInput
+                style={loginStyles.inputCnpj}
+                value={cnpj}
+                keyboardType="numeric"
+                placeholder="CNPJ (XX.XXX.XXX/XXXX-XX)"
+                onChangeText={handleChangeCNPJ}
+                maxLength={18}
+                editable={!isLoading}
+                returnKeyType="done"
+                autoCapitalize="none"
+              />
+            </View>
+            <TouchableOpacity
+              style={loginStyles.buttonEntrar}
+              activeOpacity={0.75}
+              onPress={loginCNPJ}
+              disabled={isLoading || cnpj.length < 18}
+            >
+              {isLoading
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>Entrar</Text>}
+            </TouchableOpacity>
+            {errorMsg && <Text style={loginStyles.errorMsg}>{errorMsg}</Text>}
+            {successMsg && <Animated.Text style={[loginStyles.successMsg, { opacity: fadeAnim }]}>{successMsg}</Animated.Text>}
+            <View style={{ marginTop: 16 }}>
+              <Text style={{ color: '#999' }}>CNPJ autorizado: {CNPJ_PERMITIDO}</Text>
+            </View>
+          </View>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ... restante do app principal, igual ao exemplo anterior...
+  // (Mantém toda tela principal do ESP32-CAM, log, desconectar, enviar comandos etc.)
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -385,14 +413,12 @@ function AppMain({ navigation, route }: any) {
             <Text style={styles.sendButtonText}>Enviar</Text>
           </TouchableOpacity>
         </View>
-
         {isConnected && (
           <View style={styles.statusBox}>
             <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
           </View>
         )}
-
-        <Text style={{ color: "#aaa", marginTop: 10 }}>CNPJ logado: {cnpj}</Text>
+        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {cnpj}</Text>
         <TouchableOpacity
           style={{
             marginTop: 16,
@@ -457,19 +483,27 @@ function AppMain({ navigation, route }: any) {
   );
 }
 
-// ----------------- EXPORT ROOT -------------------
-export default function App() {
-  return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName="Login" screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="AppMain" component={AppMain} />
-      </Stack.Navigator>
-    </NavigationContainer>
-  );
-}
-
-// ----------------- Styles -------------------
+// --- STYLES ---
+const loginStyles = StyleSheet.create({
+  loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
+  loginCard: {
+    width: '92%', maxWidth: 400,
+    backgroundColor: '#fff',
+    borderRadius: 18, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.23, shadowRadius: 14, elevation: 14,
+    alignItems: 'center',
+  },
+  logoArea: { alignItems: 'center', marginBottom: 27 },
+  empresaText: { fontSize: 31, fontWeight: 'bold', color: '#193769', marginTop: 5, letterSpacing: 1.5 },
+  loginTitle: { fontSize: 22, fontWeight: 'bold', color: '#3182ce', marginBottom: 8 },
+  loginSubtitle: { fontSize: 14, color: '#666', marginBottom: 17 },
+  inputArea: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: '#f5f7fc', borderRadius: 10, marginBottom: 11, borderWidth: 1, borderColor: '#cde3fa', paddingHorizontal: 9 },
+  inputCnpj: { flex: 1, fontSize: 17, paddingVertical: 11, color: '#23292e' },
+  buttonEntrar: { width: '100%', backgroundColor: '#3182ce', borderRadius: 10, alignItems: 'center', paddingVertical: 15, marginTop: 7, elevation: 2 },
+  errorMsg: { color: '#d60000', fontWeight: 'bold', marginTop: 14 },
+  successMsg: { color: '#328d3f', fontWeight: 'bold', marginTop: 14, fontSize: 17 },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
