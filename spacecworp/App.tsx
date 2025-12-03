@@ -13,13 +13,15 @@ import {
   ActivityIndicator,
   Animated,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Dimensions
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 const BASE_URL = "http://192.168.15.6:80";
 
+// Funções de CNPJ
 function maskCNPJ(text: string): string {
   let v = text.replace(/\D/g, '');
   v = v.slice(0, 14);
@@ -57,7 +59,6 @@ function validateCNPJ(cnpj: string): boolean {
   return resultado === +digitos.charAt(1);
 }
 
-// Consulta CNPJ via API pública da ReceitaWS
 async function consultaCNPJ(cnpj: string): Promise<any> {
   try {
     const cnpjLimpo = cnpj.replace(/[^\d]+/g, '');
@@ -73,6 +74,7 @@ async function consultaCNPJ(cnpj: string): Promise<any> {
   }
 }
 
+// Funções ESP32-CAM
 async function fetchStatus(): Promise<any> {
   try {
     const res = await fetch(`${BASE_URL}/`);
@@ -104,8 +106,126 @@ async function fetchNotifications(): Promise<{ time: string; msg: string; type?:
   }
 }
 
+const MODAL_PAGES = [
+  "empresa",
+  "enderecos",
+  "atividade_principal",
+  "atividades_secundarias",
+  "socios",
+  "extra"
+];
+
+// Monta os dados para os modais a partir das funcionalidades da ReceitaWS
+function getModalPagesData(cnpjDados: any) {
+  return [
+    {
+      title: "Empresa",
+      content: (
+        <>
+          <Text style={modalStyles.itemLabel}>Razão social:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.nome}</Text>
+          <Text style={modalStyles.itemLabel}>Nome fantasia:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.fantasia || '-'}</Text>
+          <Text style={modalStyles.itemLabel}>Situação cadastral:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.situacao}</Text>
+          <Text style={modalStyles.itemLabel}>Tipo:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.tipo}</Text>
+          <Text style={modalStyles.itemLabel}>Natureza jurídica:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.natureza_juridica}</Text>
+          <Text style={modalStyles.itemLabel}>Capital social:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.capital_social}</Text>
+          <Text style={modalStyles.itemLabel}>Data de abertura:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.abertura}</Text>
+        </>
+      )
+    },
+    {
+      title: "Endereços",
+      content: (
+        <>
+          <Text style={modalStyles.itemLabel}>Endereço:</Text>
+          <Text style={modalStyles.itemValue}>
+            {cnpjDados.logradouro} {cnpjDados.numero} {cnpjDados.complemento}
+          </Text>
+          <Text style={modalStyles.itemLabel}>Bairro:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.bairro}</Text>
+          <Text style={modalStyles.itemLabel}>Município:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.municipio}</Text>
+          <Text style={modalStyles.itemLabel}>UF:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.uf}</Text>
+          <Text style={modalStyles.itemLabel}>CEP:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.cep}</Text>
+          <Text style={modalStyles.itemLabel}>Email:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.email}</Text>
+          <Text style={modalStyles.itemLabel}>Telefone:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.telefone}</Text>
+        </>
+      )
+    },
+    {
+      title: "CNAE Principal",
+      content: (
+        <>
+          <Text style={modalStyles.itemLabel}>Código:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.atividade_principal?.[0]?.code || '-'}</Text>
+          <Text style={modalStyles.itemLabel}>Descrição:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.atividade_principal?.[0]?.text || '-'}</Text>
+        </>
+      )
+    },
+    {
+      title: "CNAEs Secundários",
+      content: (
+        <ScrollView style={{ maxHeight: 140 }}>
+          {Array.isArray(cnpjDados.atividades_secundarias) && cnpjDados.atividades_secundarias.length > 0 ? cnpjDados.atividades_secundarias.map((a:any, i:number) => (
+            <View key={i} style={{ marginBottom: 7 }}>
+              <Text style={modalStyles.itemLabel}>CNAE Secundário #{i+1}</Text>
+              <Text style={modalStyles.itemValue}>{a.code} - {a.text}</Text>
+            </View>
+          )) : <Text style={modalStyles.itemValue}>Não informado</Text>}
+        </ScrollView>
+      )
+    },
+    {
+      title: "Sócios / QSA",
+      content: (
+        <ScrollView style={{ maxHeight: 140 }}>
+          {Array.isArray(cnpjDados.qsa) && cnpjDados.qsa.length > 0 ? cnpjDados.qsa.map((s:any,i:number) => (
+            <View key={i} style={{ marginBottom: 10 }}>
+              <Text style={modalStyles.itemLabel}>Nome:</Text>
+              <Text style={modalStyles.itemValue}>{s.nome}</Text>
+              <Text style={modalStyles.itemLabel}>Qualificação:</Text>
+              <Text style={modalStyles.itemValue}>{s.qual}</Text>
+            </View>
+          )) : <Text style={modalStyles.itemValue}>Não informado</Text>}
+        </ScrollView>
+      )
+    },
+    {
+      title: "Extra",
+      content: (
+        <>
+          <Text style={modalStyles.itemLabel}>Status:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.status}</Text>
+          <Text style={modalStyles.itemLabel}>Última atualização:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.ultima_atualizacao}</Text>
+          <Text style={modalStyles.itemLabel}>Especial:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.efr || '-'}</Text>
+          <Text style={modalStyles.itemLabel}>Motivo Situação:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.motivo_situacao || '-'}</Text>
+          <Text style={modalStyles.itemLabel}>Situação especial:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.situacao_especial || '-'}</Text>
+          <Text style={modalStyles.itemLabel}>Data da situação especial:</Text>
+          <Text style={modalStyles.itemValue}>{cnpjDados.data_situacao_especial || '-'}</Text>
+        </>
+      )
+    }
+  ];
+}
+
+// COMPONENTE PRINCIPAL
 export default function App() {
-  // Login states
+  // Estados padrão
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cnpj, setCnpj] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -117,6 +237,18 @@ export default function App() {
   const logoAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Modal de consulta CNPJ paginado
+  const [modalPage, setModalPage] = useState(0);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  // Main app states
+  const [log, setLog] = useState<{ time: string; msg: string; type?: string }[]>([]);
+  const [status, setStatus] = useState<any>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [textToSend, setTextToSend] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -134,15 +266,6 @@ export default function App() {
       }),
     ]).start();
   }, []);
-
-  // Main app states
-  const [modalVisible, setModalVisible] = useState(false);
-  const [log, setLog] = useState<{ time: string; msg: string; type?: string }[]>([]);
-  const [status, setStatus] = useState<any>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [textToSend, setTextToSend] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
   function handleLogout() {
     Alert.alert("Logout", "Deseja sair do aplicativo?", [
@@ -165,7 +288,7 @@ export default function App() {
     setCnpjDados(null);
   }
 
-  // Login usando consulta da ReceitaWS, só permite entradas válidas e existentes:
+  // Login usando consulta da ReceitaWS
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -177,11 +300,10 @@ export default function App() {
       return;
     }
     try {
-      // Consulta os dados do CNPJ para verificar autenticidade na ReceitaWS
       const dados = await consultaCNPJ(cnpj);
       setCnpjDados(dados);
-      setIsLoading(false);
       setSuccessMsg('Login realizado com sucesso!');
+      setIsLoading(false);
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 500,
@@ -197,6 +319,23 @@ export default function App() {
     }
   }
 
+  // --- Modal de consulta de CNPJ paginado ---
+  function openModalPage(page: number = 0) {
+    setModalPage(page);
+    setModalVisible(true);
+  }
+  function nextModalPage() {
+    setModalPage((p) => Math.min(p+1, MODAL_PAGES.length-1));
+  }
+  function prevModalPage() {
+    setModalPage((p) => Math.max(p-1, 0));
+  }
+  function closeModalPage() {
+    setModalVisible(false);
+    setModalPage(0);
+  }
+
+  // Main app logic
   useEffect(() => {
     async function pollNotifications() {
       if (!isConnected) return;
@@ -285,6 +424,7 @@ export default function App() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
+  // ----------- Login empresarial via CNPJ -----------
   if (!isLoggedIn) {
     return (
       <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -348,6 +488,9 @@ export default function App() {
     );
   }
 
+  // --- Seu app principal ---
+  const modalPagesData = cnpjDados ? getModalPagesData(cnpjDados) : [];
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -409,36 +552,19 @@ export default function App() {
           </View>
         )}
         <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {cnpjDados.fantasia}</Text>
+
         {cnpjDados && (
-          <View style={{ marginTop: 15, padding: 11, backgroundColor: '#f4f8fb', borderRadius: 8, alignSelf: "stretch" }}>
-            <Text style={{ fontWeight: "bold" }}>Nome empresarial:</Text>
-            <Text>{cnpjDados.nome}</Text>
-
-            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Nome fantasia:</Text>
-            <Text>{cnpjDados.fantasia ? cnpjDados.fantasia : '-'}</Text>
-
-            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Situação:</Text>
-            <Text>{cnpjDados.situacao}</Text>
-
-            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Atividade principal:</Text>
-            <Text>{cnpjDados.atividade_principal?.[0]?.text}</Text>
-
-            <Text style={{ fontWeight: "bold", marginTop: 4 }}>CNAE:</Text>
-            <Text>
-              {cnpjDados.atividade_principal?.[0]?.code 
-                ? `${cnpjDados.atividade_principal[0].code} - ${cnpjDados.atividade_principal[0].text}`
-                : '-'
-              }
+          <TouchableOpacity
+            style={styles.cnpjButton}
+            onPress={() => openModalPage(0)}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: '#3182ce', fontWeight: 'bold', textAlign: 'center' }}>
+              Ver dados completos da Empresa
             </Text>
-
-            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Tipo:</Text>
-            <Text>{cnpjDados.tipo}</Text>
-            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Natureza jurídica:</Text>
-            <Text>{cnpjDados.natureza_juridica}</Text>
-            <Text style={{ fontWeight: "bold", marginTop: 4 }}>UF:</Text>
-            <Text>{cnpjDados.uf}</Text>
-          </View>
+          </TouchableOpacity>
         )}
+
         <TouchableOpacity
           style={{
             marginTop: 16,
@@ -454,8 +580,53 @@ export default function App() {
         </TouchableOpacity>
         <StatusBar style="auto" />
       </ScrollView>
+
+      {/* Modal paginado com dados do CNPJ */}
+      {cnpjDados && (
       <Modal
         visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeModalPage}>
+        <View style={modalStyles.wrapper}>
+          <View style={modalStyles.modalCard}>
+            <Text style={modalStyles.modalTitle}>
+              {modalPagesData[modalPage]?.title ?? ''}
+            </Text>
+            <ScrollView style={modalStyles.modalContent}>
+              {modalPagesData[modalPage]?.content}
+            </ScrollView>
+            <View style={modalStyles.modalPaginationRow}>
+              <TouchableOpacity
+                style={[modalStyles.modalPaginationBtn, modalPage === 0 && { opacity: 0.5 }]}
+                disabled={modalPage === 0}
+                onPress={prevModalPage}
+              >
+                <Text style={modalStyles.pgBtnText}>Anterior</Text>
+              </TouchableOpacity>
+              <Text style={modalStyles.pgIndicator}>{modalPage+1} / {MODAL_PAGES.length}</Text>
+              <TouchableOpacity
+                style={[modalStyles.modalPaginationBtn, modalPage === MODAL_PAGES.length-1 && { opacity: 0.5 }]}
+                disabled={modalPage === MODAL_PAGES.length-1}
+                onPress={nextModalPage}
+              >
+                <Text style={modalStyles.pgBtnText}>Próximo</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={modalStyles.closeModalBtn}
+              onPress={closeModalPage}
+            >
+              <Text style={modalStyles.closeModalText}>Fechar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      )}
+
+      {/* Modal antigo (LOG) permanece igual */}
+      <Modal
+        visible={modalVisible && !cnpjDados}
         animationType="fade"
         transparent
         onRequestClose={() => setModalVisible(false)}>
@@ -555,6 +726,17 @@ const styles = StyleSheet.create({
     padding: 12, marginVertical: 6, borderRadius: 10,
     backgroundColor: "#f2f9ff", alignSelf: "stretch", marginHorizontal: 12
   },
+  cnpjButton: {
+    alignSelf: "center",
+    marginTop: 20,
+    paddingHorizontal: 30,
+    paddingVertical: 13,
+    borderRadius: 9,
+    backgroundColor: "#e6f0fc",
+    elevation: 1,
+    borderWidth: 1,
+    borderColor: "#b5ccf1"
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center', },
   card: {
     width: '94%',
@@ -594,4 +776,39 @@ const styles = StyleSheet.create({
   closed: { color: '#555' },
   success: { color: '#079b31' },
   notify: { color: "#c97806", fontStyle: "italic", fontWeight: "bold" },
+});
+
+const modalStyles = StyleSheet.create({
+  wrapper: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: {
+    width: '95%',
+    maxWidth: 450,
+    minHeight: 320,
+    maxHeight: Dimensions.get('window').height * 0.88,
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 21,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.21,
+    shadowRadius: 13,
+    elevation: 11
+  },
+  modalTitle: { fontSize: 21, fontWeight: 'bold', marginBottom: 14, textAlign: 'center', color: '#2182dd' },
+  modalContent: { flex: 1, marginBottom: 12, paddingHorizontal: 4 },
+  modalPaginationRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 10 },
+  modalPaginationBtn: {
+    backgroundColor: "#e5edf7",
+    borderRadius: 8, paddingVertical: 9, paddingHorizontal: 16,
+    borderWidth: 1, borderColor: "#aacbe3"
+  },
+  pgBtnText: { fontWeight: "bold", color: "#3182ce" },
+  pgIndicator: { marginHorizontal: 13, fontWeight: "bold", color: "#193769" },
+  closeModalBtn: {
+    alignSelf: 'center', backgroundColor: '#3172fa',
+    borderRadius: 9, paddingHorizontal: 30, paddingVertical: 12, marginTop: 2,
+  },
+  closeModalText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  itemLabel: { fontWeight: "bold", marginTop: 6, color: "#23578a" },
+  itemValue: { color: "#222", marginBottom: 2, fontSize: 15 }
 });
