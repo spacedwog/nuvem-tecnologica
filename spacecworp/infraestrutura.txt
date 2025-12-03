@@ -1,0 +1,83 @@
+# Onde obter/cadastrar `GITHUB_REDIRECT_URI` e `BACKEND_TOKEN_URL` para OAuth do GitHub
+
+---
+
+## 1. `GITHUB_REDIRECT_URI`
+
+**O que é?**  
+É a URL de retorno/callback para onde o GitHub redireciona o usuário depois que ele autoriza o aplicativo.  
+No React Native, normalmente é um deep link (ex: `meuapp://oauth-callback`) ou uma URL HTTP se usa backend/web.
+
+### Como cadastrar e obter:
+
+- **Vá até sua conta no GitHub → Settings → Developer settings → OAuth Apps**
+    - Ou acesse: [github.com/settings/developers](https://github.com/settings/developers)
+
+- **Crie um novo OAuth App** ou edite um existente
+
+- **No campo** `Authorization callback URL` **você deve informar seu redirect URI. Exemplos:**
+    - Para *web/backend local*:  
+      `http://localhost:3000/oauth-callback`
+    - Para *React Native usando deep linking*:  
+      `spacecworp://oauth-callback`
+      - Você configura esse esquema no seu `app.json` (expo) ou via AndroidManifest/Info.plist.
+
+- **Copie exatamente esse valor para sua variáve**l:  
+  ```typescript
+  const GITHUB_REDIRECT_URI = 'spacecworp://oauth-callback';
+  ```
+
+---
+
+## 2. `BACKEND_TOKEN_URL`
+
+**O que é?**  
+É o endpoint do seu backend que recebe o `code` do GitHub e troca por um `access_token`.  
+**Nunca** coloque o client secret dentro do app, por questões de segurança!
+
+### Como configurar/backend:
+
+- Você implementa uma rota que faz um request POST para [https://github.com/login/oauth/access_token](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps#step-3-github-redirects-back-to-your-site)
+- Exemplo Node.js/Express:
+
+```javascript
+// Backend exemplo
+app.post('/oauth/github', async (req, res) => {
+  const { code, redirect_uri } = req.body;
+  const response = await fetch('https://github.com/login/oauth/access_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({
+      client_id: process.env.GITHUB_CLIENT_ID,
+      client_secret: process.env.GITHUB_CLIENT_SECRET,
+      code,
+      redirect_uri
+    })
+  });
+  const resp = await response.json();
+  res.json(resp); // { access_token: "...", ... }
+});
+```
+
+- **Depois, use a URL do backend configurada para esta rota**
+    - Por exemplo, se o backend está em https://minhaapi.com, a rota pode ser:  
+      ```
+      const BACKEND_TOKEN_URL = "https://minhaapi.com/oauth/github";
+      ```
+
+---
+
+## Resumindo
+
+| Variável              | Onde obter/cadastrar                          | Exemplo de valor                          |
+|-----------------------|-----------------------------------------------|-------------------------------------------|
+| GITHUB_REDIRECT_URI   | GitHub OAuth App → Authorization callback URL | `spacecworp://oauth-callback`             |
+| BACKEND_TOKEN_URL     | Sua API/backend, rota que troca o code        | `https://minhaapi.com/oauth/github`       |
+
+---
+
+**Dica:**  
+- Quando testar no simulador/emulador, você pode usar esquemas como `meuapp://oauth-callback` e configurar no Expo/React Native.  
+- Para produção, certifique-se que seu backend está disponível e que o callback URI cadastrado no GitHub corresponde exatamente ao usado no app.
+
+Se quiser exemplos de configuração de Deep Linking, peça aqui!
