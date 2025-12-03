@@ -17,10 +17,15 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 
 const API_ENDPOINT = 'http://192.168.15.6:80/api/login-cnpj';
 const CNPJ_PERMITIDO = "62.904.267/0001-60";
 const BASE_URL = "http://192.168.15.6:80";
+// ----------- Github OAuth Config ----------
+const GITHUB_CLIENT_ID = "Iv23lir3gWXCKZ170nzC";
+const GITHUB_REDIRECT_URI = "spacecworp://oauth-callback"; // altere para seu esquema DeepLink configurado em app.json/Info.plist/AndroidManifest.xml
+const BACKEND_TOKEN_URL = "https://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/oauth/github";
 
 function maskCNPJ(text: string): string {
   let v = text.replace(/\D/g, '');
@@ -105,6 +110,24 @@ async function fetchNotifications(): Promise<{ time: string; msg: string; type?:
   }
 }
 
+// ---- Github Marketplace helpers ----
+function githubOAuthUrl() {
+  const scope = "read:user read:org read:marketplace";
+  return `https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=${encodeURIComponent(scope)}&redirect_uri=${encodeURIComponent(GITHUB_REDIRECT_URI)}`;
+}
+
+async function fetchMarketplace(token: string): Promise<any[]> {
+  try {
+    const res = await fetch("https://api.github.com/user/marketplace_purchases", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error("Falha ao consultar Marketplace.");
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
   // Login states
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -114,12 +137,11 @@ export default function App() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Animações empresariais
-  const logoAnim = useRef(new Animated.Value(0)).current; // Logo começa "oculto"
-  const cardAnim = useRef(new Animated.Value(0)).current; // Card translada de baixo
-  const fadeAnim = useRef(new Animated.Value(0)).current; // Sucesso fade
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Entrada animada da logo e do card de login
     Animated.parallel([
       Animated.timing(logoAnim, {
         toValue: 1,
@@ -144,6 +166,64 @@ export default function App() {
   const [textToSend, setTextToSend] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
+
+  // ---- Github Marketplace states ----
+  const [githubToken, setGithubToken] = useState<string | null>(null);
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [marketplaceApps, setMarketplaceApps] = useState<any[]>([]);
+  const [githubError, setGithubError] = useState<string | null>(null);
+
+  function handleGithubLogin() {
+    Linking.openURL(githubOAuthUrl());
+  }
+
+  useEffect(() => {
+    const sub = Linking.addEventListener('url', async ({ url }: { url: string }) => {
+      if (url && url.startsWith(GITHUB_REDIRECT_URI)) {
+        const codeMatch = url.match(/code=([^&]+)/);
+        if (codeMatch) {
+          setGithubLoading(true);
+          setGithubError(null);
+          try {
+            // Troca código por token via backend seguro!
+            const tokenResp = await fetch(BACKEND_TOKEN_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                code: codeMatch[1],
+                redirect_uri: GITHUB_REDIRECT_URI,
+              })
+            });
+            const { access_token } = await tokenResp.json();
+            if (typeof access_token === "string" && access_token.length > 0) {
+              setGithubToken(access_token);
+              setGithubError(null);
+            } else {
+              setGithubError("Token inválido recebido.");
+            }
+          } catch (e: any) {
+            setGithubError("Falha na autenticação: " + e.message);
+          }
+          setGithubLoading(false);
+        }
+      }
+    });
+    return () => {
+      if (sub && typeof sub.remove === 'function') sub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    async function buscaApps() {
+      if (githubToken) {
+        setGithubLoading(true);
+        const apps = await fetchMarketplace(githubToken);
+        setMarketplaceApps(Array.isArray(apps) ? apps : []);
+        setGithubLoading(false);
+      }
+    }
+    if (githubToken) buscaApps();
+  }, [githubToken]);
 
   // Logout function
   function handleLogout() {
@@ -287,10 +367,44 @@ export default function App() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
+  // ----------- Github Marketplace view ----------
+  if (githubToken) {
+    return (
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', backgroundColor:'#eaf1fb', padding:30 }}>
+        <Text style={{fontSize:21, fontWeight:"bold", marginBottom:10 }}>Apps adquiridos no Marketplace:</Text>
+        {githubLoading ? <ActivityIndicator /> : (
+        marketplaceApps.length === 0
+            ? <Text style={{color:'#333', marginTop:15}}>Nenhum app encontrado.</Text>
+            : marketplaceApps.map((app, idx) => (
+                <View key={idx} style={{marginBottom:8}}>
+                  <Text style={{fontWeight:'bold', color:"#196"}}>{app.marketplace_listing?.name || "Desconhecido"}</Text>
+                  <Text style={{fontSize:13, color:"#666"}}>
+                    {app.marketplace_listing?.description?.slice(0,80) || ""}
+                  </Text>
+                </View>
+              ))
+        )}
+        <TouchableOpacity
+          style={{
+            marginTop: 22,
+            backgroundColor: '#E53E3E',
+            paddingHorizontal: 30,
+            paddingVertical: 11,
+            borderRadius: 8,
+            alignSelf: 'center',
+          }}
+          onPress={() => { setGithubToken(null); setMarketplaceApps([]); }}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Sair do GitHub</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ----------- Login com opções GitHub/CNPJ -----------
   if (!isLoggedIn) {
     return (
       <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* animação empresarial */}
         <Animated.View style={{
           opacity: logoAnim,
           transform: [{
@@ -301,7 +415,6 @@ export default function App() {
           }]
         }}>
           <View style={loginStyles.logoArea}>
-            {/* Você pode substituir por um SVG/Icon mais "corporativo" */}
             <MaterialIcons name="account-balance" size={57} color="#3182ce" />
             <Text style={loginStyles.empresaText}>Spacecworp</Text>
           </View>
@@ -349,15 +462,19 @@ export default function App() {
             <View style={{ marginTop: 16 }}>
               <Text style={{ color: '#999' }}>CNPJ autorizado: {CNPJ_PERMITIDO}</Text>
             </View>
+            {/* -- Opção de login Github -- */}
+            <View style={{ marginTop: 24, width: "100%", alignItems: "center", borderTopWidth: 1, borderColor: "#e0e0e0", paddingTop: 18 }}>
+              <Button color="#222" title="Login com GitHub Marketplace" onPress={handleGithubLogin} />
+              {githubLoading && <ActivityIndicator style={{ marginTop: 8 }} />}
+              {githubError && <Text style={loginStyles.errorMsg}>{githubError}</Text>}
+            </View>
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
     );
   }
 
-  // ... restante do app principal, igual ao exemplo anterior...
-  // (Mantém toda tela principal do ESP32-CAM, log, desconectar, enviar comandos etc.)
-
+  // --- Seu app principal (mantido igual ao original) ---
   return (
     <View style={styles.container}>
       <ScrollView
