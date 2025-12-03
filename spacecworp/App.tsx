@@ -17,13 +17,8 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { Linking } from 'react-native';
 
-const API_ENDPOINT = 'http://192.168.15.6:80/api/login-cnpj';
-const CNPJ_PERMITIDO = "62.904.267/0001-60";
 const BASE_URL = "http://192.168.15.6:80";
-
-// Removido todo código relacionado ao Github OAuth / Marketplace
 
 function maskCNPJ(text: string): string {
   let v = text.replace(/\D/g, '');
@@ -62,18 +57,19 @@ function validateCNPJ(cnpj: string): boolean {
   return resultado === +digitos.charAt(1);
 }
 
-async function autenticaCNPJ(cnpj: string): Promise<boolean> {
+// Consulta CNPJ via API pública da ReceitaWS
+async function consultaCNPJ(cnpj: string): Promise<any> {
   try {
-    const resp = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cnpj }),
-    });
-    if (!resp.ok) return false;
+    const cnpjLimpo = cnpj.replace(/[^\d]+/g, '');
+    if (cnpjLimpo.length !== 14) throw new Error("CNPJ inválido.");
+    const url = `https://www.receitaws.com.br/v1/cnpj/${cnpjLimpo}`;
+    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (!resp.ok) throw new Error("Erro ao consultar CNPJ na ReceitaWS.");
     const json = await resp.json();
-    return json.autorizado === true;
-  } catch {
-    return cnpj === CNPJ_PERMITIDO;
+    if (json.status === 'ERROR') throw new Error(json.message);
+    return json;
+  } catch (e: any) {
+    throw new Error(e.message || "Falha na consulta de CNPJ.");
   }
 }
 
@@ -115,6 +111,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [cnpjDados, setCnpjDados] = useState<any | null>(null);
 
   // Animações empresariais
   const logoAnim = useRef(new Animated.Value(0)).current;
@@ -147,7 +144,6 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
-  // Logout function
   function handleLogout() {
     Alert.alert("Logout", "Deseja sair do aplicativo?", [
       { text: "Cancelar", style: "cancel" },
@@ -157,17 +153,19 @@ export default function App() {
         setIsConnected(false);
         setStatus(null);
         setLog([]);
+        setCnpjDados(null);
       } }
     ]);
   }
 
-  // Login logic
   function handleChangeCNPJ(text: string) {
     setErrorMsg(null);
     setSuccessMsg(null);
     setCnpj(maskCNPJ(text));
+    setCnpjDados(null);
   }
 
+  // Login usando consulta da ReceitaWS, só permite entradas válidas e existentes:
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -179,12 +177,10 @@ export default function App() {
       return;
     }
     try {
-      const autorizado = await autenticaCNPJ(cnpj);
+      // Consulta os dados do CNPJ para verificar autenticidade na ReceitaWS
+      const dados = await consultaCNPJ(cnpj);
+      setCnpjDados(dados);
       setIsLoading(false);
-      if (!autorizado) {
-        setErrorMsg('CNPJ não autorizado.');
-        return;
-      }
       setSuccessMsg('Login realizado com sucesso!');
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -194,13 +190,13 @@ export default function App() {
       setTimeout(() => {
         setIsLoggedIn(true);
       }, 900);
-    } catch {
-      setErrorMsg('Erro de conexão.');
+    } catch (e: any) {
+      setErrorMsg('CNPJ não encontrado ou inválido! ' + e.message);
+      setCnpjDados(null);
       setIsLoading(false);
     }
   }
 
-  // Main app logic
   useEffect(() => {
     async function pollNotifications() {
       if (!isConnected) return;
@@ -289,7 +285,6 @@ export default function App() {
     setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
   }
 
-  // ----------- Login empresarial via CNPJ -----------
   if (!isLoggedIn) {
     return (
       <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -347,16 +342,12 @@ export default function App() {
             </TouchableOpacity>
             {errorMsg && <Text style={loginStyles.errorMsg}>{errorMsg}</Text>}
             {successMsg && <Animated.Text style={[loginStyles.successMsg, { opacity: fadeAnim }]}>{successMsg}</Animated.Text>}
-            <View style={{ marginTop: 16 }}>
-              <Text style={{ color: '#999' }}>CNPJ autorizado: {CNPJ_PERMITIDO}</Text>
-            </View>
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
     );
   }
 
-  // --- Seu app principal (mantido igual ao original) ---
   return (
     <View style={styles.container}>
       <ScrollView
@@ -417,7 +408,27 @@ export default function App() {
             <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
           </View>
         )}
-        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {cnpj}</Text>
+        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {cnpjDados.fantasia}</Text>
+        {cnpjDados && (
+          <View style={{ marginTop: 15, padding: 11, backgroundColor: '#f4f8fb', borderRadius: 8, alignSelf: "stretch" }}>
+            <Text style={{ fontWeight: "bold" }}>Nome empresarial:</Text>
+            <Text>{cnpjDados.nome}</Text>
+
+            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Nome fantasia:</Text>
+            <Text>{cnpjDados.fantasia ? cnpjDados.fantasia : '-'}</Text>
+
+            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Situação:</Text>
+            <Text>{cnpjDados.situacao}</Text>
+            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Atividade principal:</Text>
+            <Text>{cnpjDados.atividade_principal?.[0]?.text}</Text>
+            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Tipo:</Text>
+            <Text>{cnpjDados.tipo}</Text>
+            <Text style={{ fontWeight: "bold", marginTop: 4 }}>Natureza jurídica:</Text>
+            <Text>{cnpjDados.natureza_juridica}</Text>
+            <Text style={{ fontWeight: "bold", marginTop: 4 }}>UF:</Text>
+            <Text>{cnpjDados.uf}</Text>
+          </View>
+        )}
         <TouchableOpacity
           style={{
             marginTop: 16,
@@ -486,7 +497,7 @@ export default function App() {
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
   loginCard: {
-    width: '92%', maxWidth: 400,
+    width: '100%', maxWidth: 420,
     backgroundColor: '#fff',
     borderRadius: 18, padding: 24,
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
