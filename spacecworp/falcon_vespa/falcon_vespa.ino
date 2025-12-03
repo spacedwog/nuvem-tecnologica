@@ -84,7 +84,7 @@ void handleNotify() {
 
 // Notificação alteração pino 33 ======================
 void sendNotification(int newValue) {
-  String mensagem = "Mudança detectada no pino 33: novo valor = " + String(newValue);
+  String mensagem = "Mudança detectada no Potenciometro: novo valor = " + String(newValue);
   Serial.println(mensagem);
 
   pin33Notify.lastValue = newValue;
@@ -138,7 +138,7 @@ void setup() {
   server.begin();
   Serial.println("Servidor HTTP iniciado!");
   pin33Notify.lastValue = analogRead(33); // Inicializa valor do pino
-  pin33Notify.lastMessage = "Inicializado: pino 33 = " + String(pin33Notify.lastValue);
+  pin33Notify.lastMessage = "Inicializado: Potenciometro = " + String(pin33Notify.lastValue);
   pin33Notify.lastTime = millis();
 }
 
