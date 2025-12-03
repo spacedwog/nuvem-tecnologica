@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import * as Linking from 'expo-linking';
+import { Linking } from 'react-native';
 
 const API_ENDPOINT = 'http://192.168.15.6:80/api/login-cnpj';
 const CNPJ_PERMITIDO = "62.904.267/0001-60";
@@ -25,7 +25,7 @@ const BASE_URL = "http://192.168.15.6:80";
 // ----------- Github OAuth Config ----------
 const GITHUB_CLIENT_ID = "Iv23lir3gWXCKZ170nzC";
 const GITHUB_REDIRECT_URI = "spacecworp://oauth-callback"; // altere para seu esquema DeepLink configurado em app.json/Info.plist/AndroidManifest.xml
-const BACKEND_TOKEN_URL = "https://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/oauth/github";
+const BACKEND_TOKEN_URL = "http://192.168.15.6:80/oauth/github";
 
 function maskCNPJ(text: string): string {
   let v = text.replace(/\D/g, '');

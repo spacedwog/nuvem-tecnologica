@@ -12,6 +12,7 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "scheme": "spacecworp",
     "ios": {
       "supportsTablet": true
     },
