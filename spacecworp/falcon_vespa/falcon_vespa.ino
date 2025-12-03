@@ -1,5 +1,5 @@
 /*******************************************************************************
- * ESP32-CAM (Vespa) + WiFi STA/AP + HTTP Server + API /api/login-cnpj
+ * ESP32-CAM (Vespa) + WiFi STA/AP + HTTP Server + API /api/login-cnpj + /empresa
  ******************************************************************************/
 
 #include <WiFi.h>
@@ -142,6 +142,40 @@ void handleLoginCNPJ() {
   server.send(200, "application/json", out);
 }
 
+// ============ ENDPOINT /empresa ============
+// Recebe JSON do app com os dados empresariais consultados
+void handleEmpresa() {
+  if (server.method() != HTTP_POST || !server.hasArg("plain")) {
+    server.send(400, "application/json", "{\"error\":\"JSON obrigatório\"}");
+    return;
+  }
+  String body = server.arg("plain");
+  StaticJsonDocument<2048> doc; // Tamanho ajustável conforme dados enviados
+  DeserializationError err = deserializeJson(doc, body);
+  if (err) {
+    server.send(400, "application/json", "{\"error\":\"JSON malformado\"}");
+    return;
+  }
+
+  // Exemplos de campos esperados:
+  const char* razao = doc["nome"];
+  const char* fantasia = doc["fantasia"];
+  const char* cnpj = doc["cnpj"];
+  const char* situacao = doc["situacao"];
+  // ... adicione todos os outros campos relevantes conforme seu app
+
+  Serial.println("=== Dados empresariais recebidos ===");
+  Serial.print("Razão social: "); Serial.println(razao);
+  Serial.print("Nome fantasia: "); Serial.println(fantasia);
+  Serial.print("CNPJ: "); Serial.println(cnpj);
+  Serial.print("Situação: "); Serial.println(situacao);
+  // Imprima outros campos se quiser
+
+  // Você pode salvar, processar ou armazenar os dados aqui!
+
+  server.send(200, "application/json", "{\"ok\":true,\"msg\":\"Dados empresariais recebidos com sucesso\"}");
+}
+
 // Notificação alteração pino 33 ======================
 void sendNotification(int newValue) {
   String mensagem = "Mudança detectada no Potenciometro: novo valor = " + String(newValue);
@@ -191,6 +225,7 @@ void setup() {
   server.on("/cmd", handleControl);
   server.on("/notify", handleNotify);
   server.on("/api/login-cnpj", HTTP_POST, handleLoginCNPJ);
+  server.on("/empresa", HTTP_POST, handleEmpresa);  // <- Novo endpoint para dados empresariais
   server.begin();
   Serial.println("Servidor HTTP iniciado!");
   pin33Notify.lastValue = analogRead(33);

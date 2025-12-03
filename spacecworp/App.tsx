@@ -106,6 +106,29 @@ async function fetchNotifications(): Promise<{ time: string; msg: string; type?:
   }
 }
 
+// Função para enviar dados empresariais à VESPA
+async function sendCompanyDataToVespa(cnpjDados: any, setLog: Function, isConnected: boolean) {
+  if (!isConnected) {
+    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Conecte-se ao ESP32-CAM para enviar dados.", type: "error" }]);
+    return;
+  }
+  if (!cnpjDados) {
+    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Nenhum dado empresarial carregado.", type: "error" }]);
+    return;
+  }
+  try {
+    const resp = await fetch(`${BASE_URL}/empresa`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cnpjDados),
+    });
+    if (!resp.ok) throw new Error(await resp.text());
+    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Dados empresariais enviados com sucesso!", type: "success" }]);
+  } catch (e: any) {
+    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Falha ao enviar dados: " + (e.message || e), type: "error" }]);
+  }
+}
+
 const MODAL_PAGES = [
   "empresa",
   "enderecos",
@@ -533,6 +556,25 @@ export default function App() {
           >
             <Text style={{ color: '#3182ce', fontWeight: 'bold', textAlign: 'center' }}>
               Ver dados completos da Empresa
+            </Text>
+          </TouchableOpacity>
+        )}
+        {/* Botão para enviar dados empresariais à VESPA */}
+        {cnpjDados && isConnected && (
+          <TouchableOpacity
+            style={{
+              marginTop: 14,
+              backgroundColor: "#3182ce",
+              paddingHorizontal: 28,
+              paddingVertical: 12,
+              alignSelf: "center",
+              borderRadius: 8,
+            }}
+            onPress={() => sendCompanyDataToVespa(cnpjDados, setLog, isConnected)}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>
+              Enviar dados empresariais para a VESPA
             </Text>
           </TouchableOpacity>
         )}
