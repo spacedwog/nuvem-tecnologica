@@ -62,16 +62,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
+        // Checa tipo da chave PIX (pode ser CPF, CNPJ, email, telefone, aleatória)
+        // O Pix aceita: CPF/CNPJ numérico, telefone (br), e-mail, chave aleatória (uuid/hex)
+        const pixKeyTrimmed = typeof key === "string" ? key.trim() : "";
+        if (!pixKeyTrimmed || pixKeyTrimmed.length < 8) {
+          return res.status(400).json({ error: "Chave PIX inválida ou muito curta." });
+        }
+
+        // Se CPF/CNPJ, reduz só a números. Se não, deixa como está.
+        // Regra simples: se tudo número e comprimento típico de cpf/cnpj, limpa. Se contém @, etc, deixa.
+        let parsedPixKey = pixKeyTrimmed;
+        if (/^\d{11}$/.test(parsedPixKey) || /^\d{14}$/.test(parsedPixKey)) {
+          parsedPixKey = parsedPixKey.replace(/\D/g, '');
+        }
+
         try {
-          const pix = new PixClass({
-            key: key.replace(/\D/g, ''),
+          const pixObj = new PixClass({
+            key: parsedPixKey,
             name: "EMPRESA LTDA",
             city: "SAO PAULO",
             amount: Number(amount),
             message: description ? String(description).substr(0, 25) : "",
             txid: id.replace(/-/g, '').slice(0, 35),
           });
-          const qrPayload = typeof pix.payload === "function" ? pix.payload() : (pix?.getPayload ? pix.getPayload() : null);
+          const qrPayload = typeof pixObj.payload === "function"
+            ? pixObj.payload()
+            : (typeof pixObj.getPayload === "function" ? pixObj.getPayload() : null);
 
           if (!qrPayload) {
             throw new Error("Função de geração do Pix payload não encontrada.");
@@ -80,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const tx: PixTransaction = {
             id,
             amount,
-            key,
+            key: parsedPixKey,
             description,
             status: 'pending',
             qr: qrPayload,
@@ -98,7 +114,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             description: tx.description,
           });
         } catch(err: any) {
-          return res.status(500).json({ error: "Erro ao gerar QR Pix", details: err?.message });
+          return res.status(500).json({
+            error: "Erro ao gerar QR Pix",
+            details: err?.message,
+            debug: {
+              key: parsedPixKey,
+              amount,
+              description,
+              txid: id.replace(/-/g, '').slice(0, 35),
+              pixObj: typeof pixObj !== 'undefined' ? pixObj : null
+            }
+          });
         }
       }
 
