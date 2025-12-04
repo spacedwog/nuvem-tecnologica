@@ -1,23 +1,19 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { v4 as uuidv4 } from 'uuid';
 
-// Importação flexível do qrcode-pix, cobre CommonJS/ESM, e exportações nomeadas ("QrCodePix")
 const qrcodePix = require('qrcode-pix');
 
-// Detecta exportação Pix corretamente em TODAS as formas possíveis, inclusive 'QrCodePix'
+// Detecta exportação Pix corretamente: QrCodePix para v5.0.0
 let PixClass: any = null;
 if (typeof qrcodePix === "function") {
   PixClass = qrcodePix;
-} else if ("Pix" in qrcodePix && typeof qrcodePix.Pix === "function") {
-  PixClass = qrcodePix.Pix;
-} else if ("default" in qrcodePix && typeof qrcodePix.default === "function") {
-  PixClass = qrcodePix.default;
-} else if ("default" in qrcodePix && "Pix" in qrcodePix.default && typeof qrcodePix.default.Pix === "function") {
-  PixClass = qrcodePix.default.Pix;
 } else if ("QrCodePix" in qrcodePix && typeof qrcodePix.QrCodePix === "function") {
   PixClass = qrcodePix.QrCodePix;
 } else if ("default" in qrcodePix && "QrCodePix" in qrcodePix.default && typeof qrcodePix.default.QrCodePix === "function") {
   PixClass = qrcodePix.default.QrCodePix;
+} else {
+  // fallback: função principal
+  PixClass = qrcodePix;
 }
 
 interface PixTransaction {
@@ -35,17 +31,6 @@ interface PixTransaction {
 
 const transactions: PixTransaction[] = [];
 
-// Função auxiliar para identificar o tipo da chave
-function getPixKeyType(key: string): "cpf" | "cnpj" | "email" | "phone" | "random" | undefined {
-  if (/^\d{11}$/.test(key)) return "cpf";
-  if (/^\d{14}$/.test(key)) return "cnpj";
-  if (/^([A-Fa-f0-9\-]{32,})$/.test(key)) return "random";
-  if (/@/.test(key)) return "email";
-  if (/^\+?55\d{11}$/.test(key) || /^\d{11}$/.test(key)) return "phone";
-  return undefined;
-}
-
-// Função utilitária para validação das configurações do Pix
 function validatePixConfig(pixConfig: any) {
   if (!pixConfig.key || typeof pixConfig.key !== 'string' || pixConfig.key.length < 8) {
     return "Chave PIX inválida ou muito curta.";
@@ -59,8 +44,7 @@ function validatePixConfig(pixConfig: any) {
   if (!pixConfig.txid || typeof pixConfig.txid !== 'string' || pixConfig.txid.length < 1) {
     return "TXID obrigatório.";
   }
-  // amount deve ser string agora!
-  if (!pixConfig.amount || typeof pixConfig.amount !== 'string' || Number(pixConfig.amount) <= 0) {
+  if (!pixConfig.amount || (typeof pixConfig.amount !== 'string' && typeof pixConfig.amount !== 'number') || Number(pixConfig.amount) <= 0) {
     return "Valor PIX inválido.";
   }
   return null;
@@ -81,7 +65,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { action } = req.body;
 
       if (action === 'initiate') {
-        // Recebe nome_fantasia e cidade
         const { amount, key, description, nome_fantasia, cidade } = req.body;
         if (!amount || !key)
           return res.status(400).json({ error: "amount e chave PIX obrigatórios" });
@@ -105,18 +88,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           parsedPixKey = parsedPixKey.replace(/\D/g, '');
         }
 
-        // Usa nome_fantasia e cidade (prioritários), senão valores fixos
+        // Monta configuração SEM keyType!
         const pixConfig: any = {
           key: parsedPixKey,
           name: String(nome_fantasia || "EMPRESA LTDA").substring(0, 30),
           city: String(cidade || "SAO PAULO").substring(0, 15),
-          amount: String(amount),   // <-- Corrigido para string!
+          amount: Number(amount),
           message: description ? String(description).substr(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
         };
-        // Removido keyType do objeto PixConfig!
 
-        // ------- Valida os campos obrigatórios -------
         const errorMsg = validatePixConfig(pixConfig);
         if (errorMsg) {
           return res.status(400).json({ error: errorMsg, pixConfig });
@@ -124,8 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let pixObj: any;
         try {
-          pixObj = new PixClass(pixConfig);
-
+          pixObj = PixClass(pixConfig); // Não use 'new'!
           if (!pixObj) {
             throw new Error("PixClass não retornou objeto válido. Config utilizado: " + JSON.stringify(pixConfig));
           }
@@ -162,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             nome_fantasia: tx.nome_fantasia,
             cidade: tx.cidade,
           });
-        } catch(err: any) {
+        } catch (err: any) {
           return res.status(500).json({
             error: "Erro ao gerar QR Pix",
             details: err?.message,
