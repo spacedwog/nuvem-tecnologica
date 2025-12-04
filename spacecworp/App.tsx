@@ -19,258 +19,40 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-const BASE_URL = "http://192.168.15.6:80";
+// ---------- POO Imports ----------
+import { Empresa } from './src/domain/Empresa';
+import { LogEntry } from './src/domain/LogEntry';
+import { StatusESP } from './src/domain/StatusESP';
+import { ConsultaCNPJService } from './src/services/ConsultaCNPJService';
+import { ESP32Service } from './src/services/ESP32Service';
 
-// Funções de CNPJ
-function maskCNPJ(text: string): string {
-  let v = text.replace(/\D/g, '');
-  v = v.slice(0, 14);
-  v = v.replace(/^(\d{2})(\d)/, "$1.$2");
-  v = v.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
-  v = v.replace(/\.(\d{3})(\d)/, ".$1/$2");
-  v = v.replace(/(\d{4})(\d)/, "$1-$2");
-  return v;
-}
-
-function validateCNPJ(cnpj: string): boolean {
-  cnpj = cnpj.replace(/[^\d]+/g, '');
-  if (cnpj.length !== 14) return false;
-  if (/^(\d)\1{13}$/.test(cnpj)) return false;
-  let tamanho = cnpj.length - 2;
-  let numeros = cnpj.substring(0, tamanho);
-  let digitos = cnpj.substring(tamanho);
-  let soma = 0;
-  let pos = tamanho - 7;
-  for (let i = tamanho; i >= 1; i--) {
-    soma += +numeros.charAt(tamanho - i) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  let resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
-  if (resultado !== +digitos.charAt(0)) return false;
-  tamanho += 1;
-  numeros = cnpj.substring(0, tamanho);
-  soma = 0;
-  pos = tamanho - 7;
-  for (let i = tamanho; i >= 1; i--) {
-    soma += +numeros.charAt(tamanho - i) * pos--;
-    if (pos < 2) pos = 9;
-  }
-  resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
-  return resultado === +digitos.charAt(1);
-}
-
-async function consultaCNPJ(cnpj: string): Promise<any> {
-  try {
-    const cnpjLimpo = cnpj.replace(/[^\d]+/g, '');
-    if (cnpjLimpo.length !== 14) throw new Error("CNPJ inválido.");
-    const url = `https://www.receitaws.com.br/v1/cnpj/${cnpjLimpo}`;
-    const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!resp.ok) throw new Error("Erro ao consultar CNPJ na ReceitaWS.");
-    const json = await resp.json();
-    if (json.status === 'ERROR') throw new Error(json.message);
-    return json;
-  } catch (e: any) {
-    throw new Error(e.message || "Falha na consulta de CNPJ.");
-  }
-}
-
-// Funções ESP32-CAM
-async function fetchStatus(): Promise<any> {
-  try {
-    const res = await fetch(`${BASE_URL}/`);
-    if (!res.ok) throw new Error("Resposta inválida do ESP32-CAM.");
-    return await res.json();
-  } catch (e) {
-    throw new Error("Não foi possível conectar ao ESP32-CAM.");
-  }
-}
-
-async function sendCommand(cmd: string): Promise<string> {
-  try {
-    const res = await fetch(`${BASE_URL}/cmd?cmd=${encodeURIComponent(cmd)}`);
-    if (!res.ok) throw new Error(await res.text());
-    return await res.text();
-  } catch (e: any) {
-    throw new Error(e.message || "Falha ao enviar comando.");
-  }
-}
-
-async function fetchNotifications(): Promise<{ time: string; msg: string; type?: string }[]> {
-  const url = `${BASE_URL}/notify`;
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) return [];
-    return await resp.json();
-  } catch (e) {
-    return [];
-  }
-}
-
-// Função para enviar dados empresariais à VESPA
-async function sendCompanyDataToVespa(cnpjDados: any, setLog: Function, isConnected: boolean) {
-  if (!isConnected) {
-    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Conecte-se ao ESP32-CAM para enviar dados.", type: "error" }]);
-    return;
-  }
-  if (!cnpjDados) {
-    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Nenhum dado empresarial carregado.", type: "error" }]);
-    return;
-  }
-  try {
-    const resp = await fetch(`${BASE_URL}/empresa`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cnpjDados),
-    });
-    if (!resp.ok) throw new Error(await resp.text());
-    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Dados empresariais enviados com sucesso!", type: "success" }]);
-  } catch (e: any) {
-    setLog((prev: any) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Falha ao enviar dados: " + (e.message || e), type: "error" }]);
-  }
-}
-
-const MODAL_PAGES = [
-  "empresa",
-  "enderecos",
-  "atividade_principal",
-  "atividades_secundarias",
-  "socios",
-  "extra"
-];
-
-function getModalPagesData(cnpjDados: any) {
-  return [
-    {
-      title: "Empresa",
-      content: (
-        <>
-          <Text style={modalStyles.itemLabel}>Razão social:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.nome}</Text>
-          <Text style={modalStyles.itemLabel}>Nome fantasia:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.fantasia || '-'}</Text>
-          <Text style={modalStyles.itemLabel}>Situação cadastral:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.situacao}</Text>
-          <Text style={modalStyles.itemLabel}>Tipo:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.tipo}</Text>
-          <Text style={modalStyles.itemLabel}>Natureza jurídica:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.natureza_juridica}</Text>
-          <Text style={modalStyles.itemLabel}>Capital social:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.capital_social}</Text>
-          <Text style={modalStyles.itemLabel}>Data de abertura:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.abertura}</Text>
-        </>
-      )
-    },
-    {
-      title: "Endereços",
-      content: (
-        <>
-          <Text style={modalStyles.itemLabel}>Endereço:</Text>
-          <Text style={modalStyles.itemValue}>
-            {cnpjDados.logradouro} {cnpjDados.numero} {cnpjDados.complemento}
-          </Text>
-          <Text style={modalStyles.itemLabel}>Bairro:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.bairro}</Text>
-          <Text style={modalStyles.itemLabel}>Município:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.municipio}</Text>
-          <Text style={modalStyles.itemLabel}>UF:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.uf}</Text>
-          <Text style={modalStyles.itemLabel}>CEP:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.cep}</Text>
-          <Text style={modalStyles.itemLabel}>Email:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.email}</Text>
-          <Text style={modalStyles.itemLabel}>Telefone:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.telefone}</Text>
-        </>
-      )
-    },
-    {
-      title: "CNAE Principal",
-      content: (
-        <>
-          <Text style={modalStyles.itemLabel}>Código:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.atividade_principal?.[0]?.code || '-'}</Text>
-          <Text style={modalStyles.itemLabel}>Descrição:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.atividade_principal?.[0]?.text || '-'}</Text>
-        </>
-      )
-    },
-    {
-      title: "CNAEs Secundários",
-      content: (
-        <ScrollView style={{ maxHeight: 140 }}>
-          {Array.isArray(cnpjDados.atividades_secundarias) && cnpjDados.atividades_secundarias.length > 0 ? cnpjDados.atividades_secundarias.map((a:any, i:number) => (
-            <View key={i} style={{ marginBottom: 7 }}>
-              <Text style={modalStyles.itemLabel}>CNAE Secundário #{i+1}</Text>
-              <Text style={modalStyles.itemValue}>{a.code} - {a.text}</Text>
-            </View>
-          )) : <Text style={modalStyles.itemValue}>Não informado</Text>}
-        </ScrollView>
-      )
-    },
-    {
-      title: "Sócios / QSA",
-      content: (
-        <ScrollView style={{ maxHeight: 140 }}>
-          {Array.isArray(cnpjDados.qsa) && cnpjDados.qsa.length > 0 ? cnpjDados.qsa.map((s:any,i:number) => (
-            <View key={i} style={{ marginBottom: 10 }}>
-              <Text style={modalStyles.itemLabel}>Nome:</Text>
-              <Text style={modalStyles.itemValue}>{s.nome}</Text>
-              <Text style={modalStyles.itemLabel}>Qualificação:</Text>
-              <Text style={modalStyles.itemValue}>{s.qual}</Text>
-            </View>
-          )) : <Text style={modalStyles.itemValue}>Não informado</Text>}
-        </ScrollView>
-      )
-    },
-    {
-      title: "Extra",
-      content: (
-        <>
-          <Text style={modalStyles.itemLabel}>Status:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.status}</Text>
-          <Text style={modalStyles.itemLabel}>Última atualização:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.ultima_atualizacao}</Text>
-          <Text style={modalStyles.itemLabel}>Especial:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.efr || '-'}</Text>
-          <Text style={modalStyles.itemLabel}>Motivo Situação:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.motivo_situacao || '-'}</Text>
-          <Text style={modalStyles.itemLabel}>Situação especial:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.situacao_especial || '-'}</Text>
-          <Text style={modalStyles.itemLabel}>Data da situação especial:</Text>
-          <Text style={modalStyles.itemValue}>{cnpjDados.data_situacao_especial || '-'}</Text>
-        </>
-      )
-    }
-  ];
-}
-
+// ---------- App Component ----------
 export default function App() {
-  // Estados padrão
+  // Estados principais
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cnpj, setCnpj] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [cnpjDados, setCnpjDados] = useState<any | null>(null);
+  const [empresa, setEmpresa] = useState<Empresa | null>(null);
 
-  // Modal de consulta CNPJ paginado
   const [modalPage, setModalPage] = useState(0);
   const [modalCnpjVisible, setModalCnpjVisible] = useState(false);
-  // Modal de log VESPA
   const [modalLogVisible, setModalLogVisible] = useState(false);
 
-  const [log, setLog] = useState<{ time: string; msg: string; type?: string }[]>([]);
-  const [status, setStatus] = useState<any>(null);
+  const [log, setLog] = useState<LogEntry[]>([]);
+  const [status, setStatus] = useState<StatusESP | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [textToSend, setTextToSend] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
   const logoAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // ----- Splash -----
   useEffect(() => {
     Animated.parallel([
       Animated.timing(logoAnim, { toValue: 1, duration: 950, useNativeDriver: true }),
@@ -278,6 +60,7 @@ export default function App() {
     ]).start();
   }, []);
 
+  // ----- Funções de Login -----
   function handleLogout() {
     Alert.alert("Logout", "Deseja sair do aplicativo?", [
       { text: "Cancelar", style: "cancel" },
@@ -287,7 +70,7 @@ export default function App() {
         setIsConnected(false);
         setStatus(null);
         setLog([]);
-        setCnpjDados(null);
+        setEmpresa(null);
       } }
     ]);
   }
@@ -295,8 +78,8 @@ export default function App() {
   function handleChangeCNPJ(text: string) {
     setErrorMsg(null);
     setSuccessMsg(null);
-    setCnpj(maskCNPJ(text));
-    setCnpjDados(null);
+    setCnpj(Empresa.maskCNPJ(text));
+    setEmpresa(null);
   }
 
   async function loginCNPJ() {
@@ -304,26 +87,26 @@ export default function App() {
     setSuccessMsg(null);
     setIsLoading(true);
     fadeAnim.setValue(0);
-    if (!validateCNPJ(cnpj)) {
+    if (!Empresa.validateCNPJ(cnpj)) {
       setErrorMsg('CNPJ inválido');
       setIsLoading(false);
       return;
     }
     try {
-      const dados = await consultaCNPJ(cnpj);
-      setCnpjDados(dados);
+      const dados = await ConsultaCNPJService.consulta(cnpj);
+      setEmpresa(new Empresa(cnpj, dados));
       setSuccessMsg('Login realizado com sucesso!');
       setIsLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
       setTimeout(() => setIsLoggedIn(true), 900);
     } catch (e: any) {
       setErrorMsg('CNPJ não encontrado ou inválido! ' + e.message);
-      setCnpjDados(null);
+      setEmpresa(null);
       setIsLoading(false);
     }
   }
 
-  // Modal controle
+  // ----- Modal Controle -----
   function openModalPage(page: number = 0) {
     setModalPage(page);
     setModalCnpjVisible(true);
@@ -334,20 +117,16 @@ export default function App() {
   function openModalLog() { setModalLogVisible(true); }
   function closeModalLog() { setModalLogVisible(false); }
 
+  // ----- Notificações (Polling) -----
   useEffect(() => {
     async function pollNotifications() {
       if (!isConnected) return;
-      const notifs = await fetchNotifications();
-      if (!Array.isArray(notifs)) return;
+      const notifs = await ESP32Service.fetchNotifications();
       setLog(prev => {
         const allTimes = new Set(prev.map(l => l.time + l.msg));
         const news = notifs.filter((n: any) => !allTimes.has(n.time + n.msg));
         if (news.length === 0) return prev;
-        return [...prev, ...news.map(n => ({
-          time: n.time ?? new Date().toLocaleTimeString(),
-          msg: n.msg,
-          type: n.type ?? 'notify',
-        }))];
+        return [...prev, ...news];
       });
     }
     if (isConnected) {
@@ -360,57 +139,53 @@ export default function App() {
     }
   }, [isConnected]);
 
+  // ----- Funções VESPA -----
   async function handleReload() {
     setRefreshing(true);
     try {
       if (isConnected) {
-        const s = await fetchStatus();
-        setStatus(s);
+        const s = await ESP32Service.fetchStatus();
+        setStatus(new StatusESP(s));
         setLog((prev) => [
-          ...prev,
-          { time: new Date().toLocaleTimeString(), msg: "Status atualizado!", type: "info" }
+          ...prev, new LogEntry("Status atualizado!", "info")
         ]);
       } else {
         setLog((prev) => [
-          ...prev,
-          { time: new Date().toLocaleTimeString(), msg: "Não conectado: nada para atualizar.", type: "info" }
+          ...prev, new LogEntry("Não conectado: nada para atualizar.", "info")
         ]);
       }
     } catch (e: any) {
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Erro ao atualizar status: " + e.message, type: "error" }]);
+      setLog((prev) => [...prev, new LogEntry("Erro ao atualizar status: " + e.message, "error")]);
     }
     setRefreshing(false);
   }
 
   async function handleConnect() {
-    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Conectando ao ESP32-CAM...", type: "info" }]);
+    setLog((prev) => [...prev, new LogEntry("Conectando ao ESP32-CAM...", "info")]);
     try {
-      const s = await fetchStatus();
-      setStatus(s);
+      const s = await ESP32Service.fetchStatus();
+      setStatus(new StatusESP(s));
       setIsConnected(true);
-      setLog((prev) => [
-        ...prev,
-        { time: new Date().toLocaleTimeString(), msg: "Conectado!", type: "success" }
-      ]);
+      setLog((prev) => [...prev, new LogEntry("Conectado!", "success")]);
     } catch (e: any) {
       setIsConnected(false);
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: e.message, type: "error" }]);
+      setLog((prev) => [...prev, new LogEntry(e.message, "error")]);
     }
   }
 
   async function handleSendData(cmd?: string) {
     if (!isConnected) {
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Não está conectado ao ESP32-CAM.", type: "error" }]);
+      setLog((prev) => [...prev, new LogEntry("Não está conectado ao ESP32-CAM.", "error")]);
       return;
     }
     const toSend = (cmd !== undefined ? cmd : textToSend).trim();
     if (!toSend) return;
-    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Enviando comando: " + toSend, type: "sent" }]);
+    setLog((prev) => [...prev, new LogEntry("Enviando comando: " + toSend, "sent")]);
     try {
-      const resp = await sendCommand(toSend);
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Resposta: " + resp, type: "received" }]);
+      const resp = await ESP32Service.sendCommand(toSend);
+      setLog((prev) => [...prev, new LogEntry("Resposta: " + resp, "received")]);
     } catch (e: any) {
-      setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: e.message, type: "error" }]);
+      setLog((prev) => [...prev, new LogEntry(e.message, "error")]);
     } finally {
       if (cmd === undefined) setTextToSend('');
     }
@@ -419,9 +194,145 @@ export default function App() {
   async function handleDisconnect() {
     setIsConnected(false);
     setStatus(null);
-    setLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), msg: "Desconectado manualmente.", type: "closed" }]);
+    setLog((prev) => [...prev, new LogEntry("Desconectado manualmente.", "closed")]);
   }
 
+  async function handleSendCompanyToVespa() {
+    if (!isConnected) {
+      setLog((prev) => [...prev, new LogEntry("Conecte-se ao ESP32-CAM para enviar dados.", "error")]);
+      return;
+    }
+    if (!empresa?.dados) {
+      setLog((prev) => [...prev, new LogEntry("Nenhum dado empresarial carregado.", "error")]);
+      return;
+    }
+    try {
+      await ESP32Service.sendCompanyDataToVespa(empresa.dados);
+      setLog((prev) => [...prev, new LogEntry("Dados empresariais enviados com sucesso!", "success")]);
+    } catch (e: any) {
+      setLog((prev) => [...prev, new LogEntry("Falha ao enviar dados: " + (e.message || e), "error")]);
+    }
+  }
+
+  // ----- Páginas do Modal -----
+  const MODAL_PAGES = [
+    "empresa",
+    "enderecos",
+    "atividade_principal",
+    "atividades_secundarias",
+    "socios",
+    "extra"
+  ];
+  function getModalPagesData(e: Empresa | null) {
+    if (!e) return [];
+    const cnpjDados = e.dados;
+    return [
+      {
+        title: "Empresa",
+        content: (
+          <>
+            <Text style={modalStyles.itemLabel}>Razão social:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.nome}</Text>
+            <Text style={modalStyles.itemLabel}>Nome fantasia:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.fantasia || '-'}</Text>
+            <Text style={modalStyles.itemLabel}>Situação cadastral:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.situacao}</Text>
+            <Text style={modalStyles.itemLabel}>Tipo:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.tipo}</Text>
+            <Text style={modalStyles.itemLabel}>Natureza jurídica:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.natureza_juridica}</Text>
+            <Text style={modalStyles.itemLabel}>Capital social:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.capital_social}</Text>
+            <Text style={modalStyles.itemLabel}>Data de abertura:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.abertura}</Text>
+          </>
+        )
+      },
+      {
+        title: "Endereços",
+        content: (
+          <>
+            <Text style={modalStyles.itemLabel}>Endereço:</Text>
+            <Text style={modalStyles.itemValue}>
+              {cnpjDados.logradouro} {cnpjDados.numero} {cnpjDados.complemento}
+            </Text>
+            <Text style={modalStyles.itemLabel}>Bairro:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.bairro}</Text>
+            <Text style={modalStyles.itemLabel}>Município:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.municipio}</Text>
+            <Text style={modalStyles.itemLabel}>UF:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.uf}</Text>
+            <Text style={modalStyles.itemLabel}>CEP:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.cep}</Text>
+            <Text style={modalStyles.itemLabel}>Email:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.email}</Text>
+            <Text style={modalStyles.itemLabel}>Telefone:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.telefone}</Text>
+          </>
+        )
+      },
+      {
+        title: "CNAE Principal",
+        content: (
+          <>
+            <Text style={modalStyles.itemLabel}>Código:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.atividade_principal?.[0]?.code || '-'}</Text>
+            <Text style={modalStyles.itemLabel}>Descrição:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.atividade_principal?.[0]?.text || '-'}</Text>
+          </>
+        )
+      },
+      {
+        title: "CNAEs Secundários",
+        content: (
+          <ScrollView style={{ maxHeight: 140 }}>
+            {Array.isArray(cnpjDados.atividades_secundarias) && cnpjDados.atividades_secundarias.length > 0 ? cnpjDados.atividades_secundarias.map((a:any, i:number) => (
+              <View key={i} style={{ marginBottom: 7 }}>
+                <Text style={modalStyles.itemLabel}>CNAE Secundário #{i+1}</Text>
+                <Text style={modalStyles.itemValue}>{a.code} - {a.text}</Text>
+              </View>
+            )) : <Text style={modalStyles.itemValue}>Não informado</Text>}
+          </ScrollView>
+        )
+      },
+      {
+        title: "Sócios / QSA",
+        content: (
+          <ScrollView style={{ maxHeight: 140 }}>
+            {Array.isArray(cnpjDados.qsa) && cnpjDados.qsa.length > 0 ? cnpjDados.qsa.map((s:any,i:number) => (
+              <View key={i} style={{ marginBottom: 10 }}>
+                <Text style={modalStyles.itemLabel}>Nome:</Text>
+                <Text style={modalStyles.itemValue}>{s.nome}</Text>
+                <Text style={modalStyles.itemLabel}>Qualificação:</Text>
+                <Text style={modalStyles.itemValue}>{s.qual}</Text>
+              </View>
+            )) : <Text style={modalStyles.itemValue}>Não informado</Text>}
+          </ScrollView>
+        )
+      },
+      {
+        title: "Extra",
+        content: (
+          <>
+            <Text style={modalStyles.itemLabel}>Status:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.status}</Text>
+            <Text style={modalStyles.itemLabel}>Última atualização:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.ultima_atualizacao}</Text>
+            <Text style={modalStyles.itemLabel}>Especial:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.efr || '-'}</Text>
+            <Text style={modalStyles.itemLabel}>Motivo Situação:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.motivo_situacao || '-'}</Text>
+            <Text style={modalStyles.itemLabel}>Situação especial:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.situacao_especial || '-'}</Text>
+            <Text style={modalStyles.itemLabel}>Data da situação especial:</Text>
+            <Text style={modalStyles.itemValue}>{cnpjDados.data_situacao_especial || '-'}</Text>
+          </>
+        )
+      }
+    ];
+  }
+
+  // --------- TELAS E MODAIS ---------
   if (!isLoggedIn) {
     return (
       <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -485,7 +396,7 @@ export default function App() {
     );
   }
 
-  const modalPagesData = cnpjDados ? getModalPagesData(cnpjDados) : [];
+  const modalPagesData = getModalPagesData(empresa);
 
   return (
     <View style={styles.container}>
@@ -547,8 +458,8 @@ export default function App() {
             <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
           </View>
         )}
-        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {cnpjDados?.fantasia || cnpj}</Text>
-        {cnpjDados && (
+        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {empresa?.dados?.fantasia || empresa?.cnpj}</Text>
+        {empresa?.dados && (
           <TouchableOpacity
             style={styles.cnpjButton}
             onPress={() => openModalPage(0)}
@@ -560,7 +471,7 @@ export default function App() {
           </TouchableOpacity>
         )}
         {/* Botão para enviar dados empresariais à VESPA */}
-        {cnpjDados && isConnected && (
+        {empresa?.dados && isConnected && (
           <TouchableOpacity
             style={{
               marginTop: 14,
@@ -570,7 +481,7 @@ export default function App() {
               alignSelf: "center",
               borderRadius: 8,
             }}
-            onPress={() => sendCompanyDataToVespa(cnpjDados, setLog, isConnected)}
+            onPress={handleSendCompanyToVespa}
             activeOpacity={0.8}
           >
             <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>
@@ -595,7 +506,7 @@ export default function App() {
       </ScrollView>
 
       {/* Modal paginado com dados do CNPJ */}
-      {cnpjDados && (
+      {empresa?.dados && (
       <Modal
         visible={modalCnpjVisible}
         animationType="slide"
@@ -637,7 +548,7 @@ export default function App() {
       </Modal>
       )}
 
-      {/* Modal de LOG - só dados do VESPA, completamente separado do modal de CNPJ */}
+      {/* Modal de LOG - só dados do VESPA */}
       <Modal
         visible={modalLogVisible}
         animationType="fade"
@@ -708,6 +619,9 @@ export default function App() {
     </View>
   );
 }
+
+// ... mesmos objetos de estilos que você já tem! loginStyles, styles, modalStyles ...
+// (Você pode copiar da sua versão original)
 
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
