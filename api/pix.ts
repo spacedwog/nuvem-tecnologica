@@ -1,17 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { v4 as uuidv4 } from 'uuid';
 
-const qrcodePix = require('qrcode-pix');
-let PixClass: any = null;
-if (typeof qrcodePix === "function") {
-  PixClass = qrcodePix;
-} else if ("QrCodePix" in qrcodePix && typeof qrcodePix.QrCodePix === "function") {
-  PixClass = qrcodePix.QrCodePix;
-} else if ("default" in qrcodePix && "QrCodePix" in qrcodePix.default && typeof qrcodePix.default.QrCodePix === "function") {
-  PixClass = qrcodePix.default.QrCodePix;
-} else {
-  PixClass = qrcodePix;
-}
+const { QrCodePix } = require('qrcode-pix'); // <-- Corretíssimo!
 
 interface PixTransaction {
   id: string;
@@ -71,13 +61,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const id = uuidv4();
 
-        if (!PixClass) {
-          return res.status(500).json({
-            error: "Biblioteca Pix não está disponível (export problem)",
-            debug: { typeof: typeof qrcodePix, keys: Object.keys(qrcodePix), inner: qrcodePix }
-          });
-        }
-
         const pixKeyTrimmed = typeof key === "string" ? key.trim() : "";
         if (!pixKeyTrimmed || pixKeyTrimmed.length < 8) {
           return res.status(400).json({ error: "Chave PIX inválida ou muito curta." });
@@ -92,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           key: parsedPixKey,
           name: String(nome_fantasia || "EMPRESA LTDA").substring(0, 30),
           city: String(cidade || "SAO PAULO").substring(0, 15),
-          amount: String(amount),   // <---- SEMPRE string!
+          amount: String(amount),   // <-- SEMPRE STRING!
           message: description ? String(description).substring(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
         };
@@ -104,9 +87,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let pixObj: any;
         try {
-          pixObj = PixClass(pixConfig); // nunca "new"
+          pixObj = QrCodePix(pixConfig); // <-- Função direta!
           if (!pixObj) {
-            throw new Error("PixClass não retornou objeto válido. Config utilizado: " + JSON.stringify(pixConfig));
+            throw new Error("QrCodePix não retornou objeto válido. Config utilizado: " + JSON.stringify(pixConfig));
           }
 
           const qrPayload = typeof pixObj.payload === "function"
@@ -119,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           const tx: PixTransaction = {
             id,
-            amount: Number(amount), // Mantém número para a resposta
+            amount: Number(amount),
             key: parsedPixKey,
             description,
             nome_fantasia: pixConfig.name,
