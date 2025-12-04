@@ -26,6 +26,32 @@ import { StatusESP } from './src/domain/StatusESP';
 import { ConsultaCNPJService } from './src/services/ConsultaCNPJService';
 import { ESP32Service } from './src/services/ESP32Service';
 
+// ENDPOINT DA API PIX
+const PIX_API = "http://localhost:4444/api/pix"; // Altere para a URL do seu backend
+
+// Funções para chamar API PIX
+async function criarPix(amount: number, key: string, description?: string) {
+  const res = await fetch(`${PIX_API}/initiate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount, key, description }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function statusPix(id: string) {
+  const res = await fetch(`${PIX_API}/status/${id}`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+async function confirmarPix(id: string) {
+  const res = await fetch(`${PIX_API}/confirm/${id}`, { method: "POST" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 // ---------- App Component ----------
 export default function App() {
   // Estados principais
@@ -45,6 +71,13 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [textToSend, setTextToSend] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+
+  // Estados PIX
+  const [pixQr, setPixQr] = useState<string | null>(null);
+  const [pixId, setPixId] = useState<string | null>(null);
+  const [pixStatus, setPixStatus] = useState<string | null>(null);
+  const [pixAmount, setPixAmount] = useState<number>(0);
+  const [pixDesc, setPixDesc] = useState<string>("");
 
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
@@ -211,6 +244,46 @@ export default function App() {
       setLog((prev) => [...prev, new LogEntry("Dados empresariais enviados com sucesso!", "success")]);
     } catch (e: any) {
       setLog((prev) => [...prev, new LogEntry("Falha ao enviar dados: " + (e.message || e), "error")]);
+    }
+  }
+
+  // ---------- PIX: Funções ----------
+  async function handleCobrarPix() {
+    try {
+      setIsLoading(true);
+      const keyPix = empresa?.dados?.email || "exemplo@chave.com";
+      const descPix = pixDesc || "Pagamento Spacecworp";
+      const resp = await criarPix(pixAmount, keyPix, descPix);
+      setPixQr(resp.qr);
+      setPixId(resp.id);
+      setPixStatus(resp.status);
+      setLog((prev) => [...prev, new LogEntry("Cobrança PIX criada!", "success")]);
+    } catch(e: any) {
+      setLog((prev) => [...prev, new LogEntry("Erro ao criar PIX: " + e.message, "error")]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function handleStatusPix() {
+    try {
+      if (!pixId) return;
+      const resp = await statusPix(pixId);
+      setPixStatus(resp.status);
+      setLog((prev) => [...prev, new LogEntry("Status PIX: " + resp.status, "info")]);
+    } catch(e: any) {
+      setLog((prev) => [...prev, new LogEntry("Erro status PIX: " + e.message, "error")]);
+    }
+  }
+
+  async function handleConfirmPix() {
+    try {
+      if (!pixId) return;
+      const resp = await confirmarPix(pixId);
+      setPixStatus(resp.status);
+      setLog((prev) => [...prev, new LogEntry("Pagamento PIX confirmado!", "success")]);
+    } catch(e: any) {
+      setLog((prev) => [...prev, new LogEntry("Erro ao confirmar PIX: " + e.message, "error")]);
     }
   }
 
@@ -470,6 +543,7 @@ export default function App() {
             </Text>
           </TouchableOpacity>
         )}
+
         {/* Botão para enviar dados empresariais à VESPA */}
         {empresa?.dados && isConnected && (
           <TouchableOpacity
@@ -489,6 +563,32 @@ export default function App() {
             </Text>
           </TouchableOpacity>
         )}
+
+        {/* Formulário PIX */}
+        <View style={{ marginTop: 18, alignSelf: "stretch", padding: 14, backgroundColor: "#f8fafc", borderRadius: 8, borderWidth: 1, borderColor: "#d5e4f7" }}>
+          <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
+          <TextInput
+            style={[styles.inputText, { marginBottom: 8 }]}
+            value={pixAmount.toString()}
+            onChangeText={v => setPixAmount(Number(v.replace(/[^\d.]/g, "")))}
+            placeholder="Valor (R$)"
+            keyboardType="numeric"
+          />
+          <TextInput
+            style={[styles.inputText, { marginBottom: 8 }]}
+            value={pixDesc}
+            onChangeText={setPixDesc}
+            placeholder="Descrição"
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, { alignSelf: "center" }]}
+            onPress={handleCobrarPix}
+            disabled={isLoading || pixAmount <= 0}
+          >
+            <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity
           style={{
             marginTop: 16,
@@ -616,12 +716,42 @@ export default function App() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal PIX */}
+      <Modal
+        visible={!!pixQr}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPixQr(null)}
+      >
+        <View style={modalStyles.wrapper}>
+          <View style={modalStyles.modalCard}>
+            <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
+            <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave:</Text>
+            <Text style={{ marginBottom: 8 }}>{empresa?.dados?.email || "exemplo@chave.com"}</Text>
+            <Text style={{ fontWeight: "bold" }}>QR Code:</Text>
+            <Text selectable style={{ padding: 10, backgroundColor: "#f4f7fb", borderRadius: 8 }}>{pixQr}</Text>
+            <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
+            <Text>{pixStatus}</Text>
+            <View style={{ flexDirection: "row", justifyContent: "space-around", marginVertical: 12 }}>
+              <TouchableOpacity style={modalStyles.modalPaginationBtn} onPress={handleStatusPix}>
+                <Text style={modalStyles.pgBtnText}>Atualizar Status</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={modalStyles.modalPaginationBtn} onPress={handleConfirmPix}>
+                <Text style={modalStyles.pgBtnText}>Confirmar Pagamento</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={modalStyles.closeModalBtn} onPress={() => setPixQr(null)}>
+                <Text style={modalStyles.closeModalText}>Fechar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 // ... mesmos objetos de estilos que você já tem! loginStyles, styles, modalStyles ...
-// (Você pode copiar da sua versão original)
 
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
