@@ -1,5 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 import { v4 as uuidv4 } from 'uuid'
+import { Pix } from 'qrcode-pix'
 
 interface PixTransaction {
   id: string;
@@ -14,7 +15,7 @@ interface PixTransaction {
 
 const transactions: PixTransaction[] = []
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
     // GET /api/pix?action=status&id=xxx
     if (req.query.action === 'status' && req.query.id) {
@@ -33,17 +34,29 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       const { amount, key, description } = req.body
       if (!amount || !key) return res.status(400).json({ error: "amount e chave PIX obrigatórios" })
       const id = uuidv4()
-      const qr = `PIX|${key}|${amount}|${description ?? ''}|${id}`
+
+      // Gera um BR Code PIX válido usando o CNPJ (sem máscara/pontuação)
+      // Exemplos para city e name: personalize conforme deseja
+      const pix = Pix({
+        key: key.replace(/\D/g, ''), // Deve ser apenas digitos do CNPJ!
+        name: "EMPRESA LTDA",         // Nome do recebedor (até 25 caracteres)
+        city: "SAO PAULO",            // Cidade (até 15 caracteres, caixa alta, sem acentos)
+        amount: Number(amount),
+        message: description ? String(description).substr(0, 25) : "",
+        txid: id.replace(/-/g, '').slice(0, 35),
+      });
+      const qrPayload = pix.payload();
+
       const tx: PixTransaction = {
         id,
         amount,
         key,
         description,
         status: 'pending',
-        qr,
+        qr: qrPayload,
         createdAt: new Date(),
-      }
-      transactions.push(tx)
+      };
+      transactions.push(tx);
       return res.json({
         id: tx.id,
         qr: tx.qr,
@@ -52,7 +65,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         amount: tx.amount,
         key: tx.key,
         description: tx.description,
-      })
+      });
     }
 
     // POST /api/pix { action: 'confirm', id }
