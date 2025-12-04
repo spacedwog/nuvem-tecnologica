@@ -29,14 +29,27 @@ import { ESP32Service } from './src/services/ESP32Service';
 // ENDPOINT DA API PIX
 const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
 
-// Funções para chamar API PIX (corrigida para endpoint correto)
-async function criarPix(amount: number, key: string, description?: string) {
+// Funções para chamar API PIX (agora envia nome_fantasia e cidade)
+async function criarPix(
+  amount: number,
+  key: string,
+  description?: string,
+  nome_fantasia?: string,
+  cidade?: string
+) {
   // Certifique-se que o CNPJ vai SEM MÁSCARA para o backend:
   const keySemMascara = key.replace(/\D/g, '');
   const res = await fetch(PIX_API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "initiate", amount, key: keySemMascara, description }),
+    body: JSON.stringify({
+      action: "initiate",
+      amount,
+      key: keySemMascara,
+      description,
+      nome_fantasia,
+      cidade,
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -258,11 +271,17 @@ export default function App() {
       // Use o CNPJ sem máscara no frontend e backend:
       const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
       const descPix = pixDesc || "Pagamento Spacecworp";
-      const resp = await criarPix(pixAmount, keyPix, descPix);
+      // Adiciona nome_fantasia e cidade:
+      const resp = await criarPix(
+        pixAmount,
+        keyPix,
+        descPix,
+        empresa?.dados?.fantasia || "",
+        empresa?.dados?.municipio || ""
+      );
 
-      console.log("PIX API Response", resp); // <-- para debug
+      console.log("PIX API Response", resp);
 
-      // Exibe resposta Pix/erro no log para diagnósticos
       if (!resp.qr || typeof resp.qr !== "string" || resp.qr.length < 10) {
         setLog((prev) => [
           ...prev,
@@ -763,6 +782,16 @@ export default function App() {
                 {empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000"}
               </Text>
 
+              {/* Exibe nome fantasia e cidade */}
+              <Text style={{ fontWeight: "bold", marginTop: 10 }}>Nome Fantasia:</Text>
+              <Text style={{ marginBottom: 8 }}>
+                {empresa?.dados?.fantasia || "-"}
+              </Text>
+              <Text style={{ fontWeight: "bold", marginTop: 4 }}>Cidade:</Text>
+              <Text style={{ marginBottom: 8 }}>
+                {empresa?.dados?.municipio || "-"}
+              </Text>
+
               {/* QR Code (BR Code texto) */}
               <Text style={{ fontWeight: "bold" }}>QR Code (copia e cola):</Text>
               <ScrollView style={{ maxHeight: 60, backgroundColor: "#f4f7fb", borderRadius: 8, marginBottom: 8, padding: 6 }}>
@@ -809,7 +838,7 @@ export default function App() {
   );
 }
 
-// ... mesmos objetos de estilos que você já tem! loginStyles, styles, modalStyles ...
+// Objetos de estilos...
 
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },

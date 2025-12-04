@@ -25,6 +25,8 @@ interface PixTransaction {
   amount: number;
   key: string;
   description?: string;
+  nome_fantasia?: string;
+  cidade?: string;
   status: 'pending' | 'completed' | 'failed' | 'expired';
   qr: string;
   createdAt: Date;
@@ -58,7 +60,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { action } = req.body;
 
       if (action === 'initiate') {
-        const { amount, key, description } = req.body;
+        // Recebe nome_fantasia e cidade
+        const { amount, key, description, nome_fantasia, cidade } = req.body;
         if (!amount || !key)
           return res.status(400).json({ error: "amount e chave PIX obrigatórios" });
 
@@ -84,10 +87,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Detecta o tipo da chave para passar ao PixClass
         const keyType = getPixKeyType(parsedPixKey);
 
+        // Usa nome_fantasia e cidade (prioritários), senão valores fixos
         const pixConfig: any = {
           key: parsedPixKey,
-          name: "EMPRESA LTDA",
-          city: "SAO PAULO",
+          name: String(nome_fantasia || "EMPRESA LTDA").substring(0, 30),
+          city: String(cidade || "SAO PAULO").substring(0, 15),
           amount: Number(amount),
           message: description ? String(description).substr(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
@@ -114,9 +118,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           const tx: PixTransaction = {
             id,
-            amount,
+            amount: Number(amount),
             key: parsedPixKey,
             description,
+            nome_fantasia: pixConfig.name,
+            cidade: pixConfig.city,
             status: 'pending',
             qr: qrPayload,
             createdAt: new Date(),
@@ -131,6 +137,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             amount: tx.amount,
             key: tx.key,
             description: tx.description,
+            nome_fantasia: tx.nome_fantasia,
+            cidade: tx.cidade,
           });
         } catch(err: any) {
           return res.status(500).json({
@@ -141,6 +149,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               keyType,
               amount,
               description,
+              nome_fantasia,
+              cidade,
               txid: id.replace(/-/g, '').slice(0, 35),
               pixObj: typeof pixObj !== 'undefined' ? pixObj : null,
               pixConfig
