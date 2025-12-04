@@ -76,8 +76,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           parsedPixKey = parsedPixKey.replace(/\D/g, '');
         }
 
+        let pixObj: any;
         try {
-          const pixObj = new PixClass({
+          pixObj = new PixClass({
             key: parsedPixKey,
             name: "EMPRESA LTDA",
             city: "SAO PAULO",
