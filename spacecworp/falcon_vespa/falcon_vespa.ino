@@ -1,5 +1,5 @@
 /*******************************************************************************
- * ESP32-CAM (Vespa) + WiFi STA/AP + HTTP Server + API /api/login-cnpj + /empresa
+ * ESP32-CAM (Vespa)
  ******************************************************************************/
 
 #include <WiFi.h>
@@ -16,9 +16,6 @@ const char* AP_PASSWORD = "falcon_vespa";
 // ========== Notificação configurável =============
 const char* WEBHOOK_URL = "http://exemplo.com/webhook";
 bool ENABLE_WEBHOOK = false;
-
-// ========= CNPJ Autorizado para login da empresa ===========
-const char* CNPJ_AUTORIZADO = "62.904.267/0001-60";
 
 // ==================== HTTP SERVER ==============================
 WebServer server(80);
@@ -113,6 +110,41 @@ void handleNotify() {
   server.send(200, "application/json", "[" + out + "]");
 }
 
+// ========== ALGORITMO DE VALIDAÇÃO DE CNPJ ==========
+bool validarCNPJ(String cnpj) {
+  // Remove pontuação
+  String digits = "";
+  for (int i = 0; i < cnpj.length(); i++) {
+    char c = cnpj.charAt(i);
+    if (c >= '0' && c <= '9') digits += c;
+  }
+  if (digits.length() != 14) return false;
+
+  int mult1[12] = {5,4,3,2,9,8,7,6,5,4,3,2};
+  int mult2[13] = {6,5,4,3,2,9,8,7,6,5,4,3,2};
+  int soma = 0, resto;
+
+  // Cálculo do primeiro dígito verificador
+  for (int i = 0; i < 12; i++)
+    soma += (digits.charAt(i) - '0') * mult1[i];
+  resto = soma % 11;
+  int dv1 = resto < 2 ? 0 : 11 - resto;
+
+  // Cálculo do segundo dígito verificador
+  soma = 0;
+  for (int i = 0; i < 12; i++)
+    soma += (digits.charAt(i) - '0') * mult2[i];
+  soma += dv1 * mult2[12];
+  resto = soma % 11;
+  int dv2 = resto < 2 ? 0 : 11 - resto;
+
+  // Verifica dígitos
+  if ((digits.charAt(12) - '0') == dv1 && (digits.charAt(13) - '0') == dv2)
+    return true;
+  else
+    return false;
+}
+
 // ========== ENDPOINT /api/login-cnpj ==========
 void handleLoginCNPJ() {
   if (server.method() != HTTP_POST || !server.hasArg("plain")) {
@@ -132,11 +164,11 @@ void handleLoginCNPJ() {
     server.send(400, "application/json", "{\"error\":\"CNPJ não encontrado\"}");
     return;
   }
-  // Compara com o CNPJ autorizado
-  bool autorizado = (String(cnpj) == String(CNPJ_AUTORIZADO));
+  // Valida CNPJ com algoritmo
+  bool autorizado = validarCNPJ(String(cnpj));
   StaticJsonDocument<64> resp;
   resp["autorizado"] = autorizado;
-  if (!autorizado) resp["error"] = "CNPJ não autorizado";
+  if (!autorizado) resp["error"] = "CNPJ inválido";
   String out;
   serializeJson(resp, out);
   server.send(200, "application/json", out);
