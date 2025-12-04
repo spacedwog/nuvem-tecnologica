@@ -33,6 +33,16 @@ interface PixTransaction {
 
 const transactions: PixTransaction[] = [];
 
+// Função auxiliar para identificar o tipo da chave
+function getPixKeyType(key: string): "cpf" | "cnpj" | "email" | "phone" | "random" | undefined {
+  if (/^\d{11}$/.test(key)) return "cpf";
+  if (/^\d{14}$/.test(key)) return "cnpj";
+  if (/^([A-Fa-f0-9\-]{32,})$/.test(key)) return "random";
+  if (/@/.test(key)) return "email";
+  if (/^\+?55\d{11}$/.test(key) || /^\d{11}$/.test(key)) return "phone";
+  return undefined;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
@@ -54,7 +64,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const id = uuidv4();
 
-        // Validação robusta
         if (!PixClass) {
           return res.status(500).json({
             error: "Biblioteca Pix não está disponível (export problem)",
@@ -62,22 +71,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           });
         }
 
-        // Checa tipo da chave PIX (pode ser CPF, CNPJ, email, telefone, aleatória)
-        // O Pix aceita: CPF/CNPJ numérico, telefone (br), e-mail, chave aleatória (uuid/hex)
         const pixKeyTrimmed = typeof key === "string" ? key.trim() : "";
         if (!pixKeyTrimmed || pixKeyTrimmed.length < 8) {
           return res.status(400).json({ error: "Chave PIX inválida ou muito curta." });
         }
 
-        // Se CPF/CNPJ, reduz só a números. Se não, deixa como está.
-        // Regra simples: se tudo número e comprimento típico de cpf/cnpj, limpa. Se contém @, etc, deixa.
         let parsedPixKey = pixKeyTrimmed;
         if (/^\d{11}$/.test(parsedPixKey) || /^\d{14}$/.test(parsedPixKey)) {
           parsedPixKey = parsedPixKey.replace(/\D/g, '');
         }
 
-        // Configuração do Pix
-        const pixConfig = {
+        // Detecta o tipo da chave para passar ao PixClass
+        const keyType = getPixKeyType(parsedPixKey);
+
+        const pixConfig: any = {
           key: parsedPixKey,
           name: "EMPRESA LTDA",
           city: "SAO PAULO",
@@ -85,17 +92,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           message: description ? String(description).substr(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
         };
+        if (keyType) {
+          pixConfig.keyType = keyType;
+        }
 
         let pixObj: any;
         try {
           pixObj = new PixClass(pixConfig);
 
-          // Defesa extra: PixClass pode retornar null/undefined
           if (!pixObj) {
             throw new Error("PixClass não retornou objeto válido. Config utilizado: " + JSON.stringify(pixConfig));
           }
 
-          // Gera o payload: pode ser método payload() ou getPayload()
           const qrPayload = typeof pixObj.payload === "function"
             ? pixObj.payload()
             : (typeof pixObj.getPayload === "function" ? pixObj.getPayload() : null);
@@ -130,6 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             details: err?.message,
             debug: {
               key: parsedPixKey,
+              keyType,
               amount,
               description,
               txid: id.replace(/-/g, '').slice(0, 35),
