@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 import { v4 as uuidv4 } from 'uuid'
-import Pix from 'qrcode-pix'
+import qrcodePix from 'qrcode-pix'; // <- Import default (com "qrcode-pix" minúsculo!)
 
 interface PixTransaction {
   id: string;
@@ -29,18 +29,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'POST') {
     const { action } = req.body
 
-    // POST /api/pix { action: 'initiate', ... }
     if (action === 'initiate') {
       const { amount, key, description } = req.body
       if (!amount || !key) return res.status(400).json({ error: "amount e chave PIX obrigatórios" })
       const id = uuidv4()
 
-      // Gera um BR Code PIX válido usando o CNPJ (sem máscara/pontuação)
-      // Exemplos para city e name: personalize conforme deseja
-      const pix = new Pix.Pix({
-        key: key.replace(/\D/g, ''), // Deve ser apenas digitos do CNPJ!
-        name: "EMPRESA LTDA",         // Nome do recebedor (até 25 caracteres)
-        city: "SAO PAULO",            // Cidade (até 15 caracteres, caixa alta, sem acentos)
+      // Use o constructor corretamente, usando .Pix
+      const pix = new (qrcodePix as any).Pix({
+        key: key.replace(/\D/g, ''),
+        name: "EMPRESA LTDA",
+        city: "SAO PAULO",
         amount: Number(amount),
         message: description ? String(description).substr(0, 25) : "",
         txid: id.replace(/-/g, '').slice(0, 35),
@@ -68,7 +66,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    // POST /api/pix { action: 'confirm', id }
     if (action === 'confirm' && req.body.id) {
       const tx = transactions.find(t => t.id === req.body.id)
       if (!tx) return res.status(404).json({ error: "Transação não encontrada" })
@@ -80,6 +77,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: "Ação POST inválida ou faltando parâmetros." })
   }
 
-  // Other HTTP methods
   return res.status(405).json({ error: "Método não suportado." })
 }
