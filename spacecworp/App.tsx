@@ -729,22 +729,56 @@ export default function App() {
         onRequestClose={() => setPixQr(null)}
       >
         <View style={modalStyles.wrapper}>
-          <View style={modalStyles.modalCard}>
+          <View style={[modalStyles.modalCard, { justifyContent: 'flex-start', minHeight: 320, paddingBottom: 32 }]}>
             <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
+
+            {/* Chave PIX */}
             <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave:</Text>
-            <Text style={{ marginBottom: 8 }}>{empresa?.dados?.email || "exemplo@chave.com"}</Text>
+            <Text style={{ marginBottom: 8 }}>
+              {empresa?.dados?.email || "exemplo@chave.com"}
+            </Text>
+
+            {/* QR Code */}
             <Text style={{ fontWeight: "bold" }}>QR Code:</Text>
-            <Text selectable style={{ padding: 10, backgroundColor: "#f4f7fb", borderRadius: 8 }}>{pixQr}</Text>
+            <Text
+              selectable
+              style={{ padding: 10, backgroundColor: "#f4f7fb", borderRadius: 8 }}
+            >
+              {pixQr}
+            </Text>
+
+            {/* Status */}
             <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
             <Text>{pixStatus}</Text>
-            <View style={{ flexDirection: "row", justifyContent: "space-around", marginVertical: 12 }}>
-              <TouchableOpacity style={modalStyles.modalPaginationBtn} onPress={handleStatusPix}>
+
+            {/* Ações */}
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-around",
+                marginVertical: 12,
+              }}
+            >
+              <TouchableOpacity
+                style={modalStyles.modalPaginationBtn}
+                onPress={handleStatusPix}
+              >
                 <Text style={modalStyles.pgBtnText}>Atualizar Status</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={modalStyles.modalPaginationBtn} onPress={handleConfirmPix}>
+              <TouchableOpacity
+                style={modalStyles.modalPaginationBtn}
+                onPress={handleConfirmPix}
+              >
                 <Text style={modalStyles.pgBtnText}>Confirmar Pagamento</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={modalStyles.closeModalBtn} onPress={() => setPixQr(null)}>
+            </View>
+
+            {/* botão FECHAR no fundo */}
+            <View style={{ flex: 1, justifyContent: 'flex-end' }}>
+              <TouchableOpacity
+                style={[modalStyles.closeModalBtn, { marginTop: 16, alignSelf: 'center' }]}
+                onPress={() => setPixQr(null)}
+              >
                 <Text style={modalStyles.closeModalText}>Fechar</Text>
               </TouchableOpacity>
             </View>
