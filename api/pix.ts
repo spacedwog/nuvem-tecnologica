@@ -1,19 +1,23 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { v4 as uuidv4 } from 'uuid';
 
-// Importação flexível do qrcode-pix, cobre todos os modos de export (CommonJS/ESM)
+// Importação flexível do qrcode-pix, cobre CommonJS/ESM, e exportações nomeadas ("QrCodePix")
 const qrcodePix = require('qrcode-pix');
 
-// Detecta exportação Pix corretamente em TODAS as formas possíveis
+// Detecta exportação Pix corretamente em TODAS as formas possíveis, inclusive 'QrCodePix'
 let PixClass: any = null;
 if (typeof qrcodePix === "function") {
   PixClass = qrcodePix;
-} else if (qrcodePix.Pix && typeof qrcodePix.Pix === "function") {
+} else if ("Pix" in qrcodePix && typeof qrcodePix.Pix === "function") {
   PixClass = qrcodePix.Pix;
-} else if (qrcodePix.default && typeof qrcodePix.default === "function") {
+} else if ("default" in qrcodePix && typeof qrcodePix.default === "function") {
   PixClass = qrcodePix.default;
-} else if (qrcodePix.default && qrcodePix.default.Pix && typeof qrcodePix.default.Pix === "function") {
+} else if ("default" in qrcodePix && "Pix" in qrcodePix.default && typeof qrcodePix.default.Pix === "function") {
   PixClass = qrcodePix.default.Pix;
+} else if ("QrCodePix" in qrcodePix && typeof qrcodePix.QrCodePix === "function") {
+  PixClass = qrcodePix.QrCodePix;
+} else if ("default" in qrcodePix && "QrCodePix" in qrcodePix.default && typeof qrcodePix.default.QrCodePix === "function") {
+  PixClass = qrcodePix.default.QrCodePix;
 }
 
 interface PixTransaction {
@@ -54,41 +58,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!PixClass) {
           return res.status(500).json({
             error: "Biblioteca Pix não está disponível (export problem)",
-            debug: { typeof: typeof qrcodePix, keys: Object.keys(qrcodePix) }
+            debug: { typeof: typeof qrcodePix, keys: Object.keys(qrcodePix), inner: qrcodePix }
           });
         }
 
-        // Gera BR Code Pix válido
-        const pix = new PixClass({
-          key: key.replace(/\D/g, ''),
-          name: "EMPRESA LTDA", // Troque pelo nome real da empresa
-          city: "SAO PAULO",   // Troque pela cidade real
-          amount: Number(amount),
-          message: description ? String(description).substr(0, 25) : "",
-          txid: id.replace(/-/g, '').slice(0, 35),
-        });
-        const qrPayload = pix.payload();
+        try {
+          const pix = new PixClass({
+            key: key.replace(/\D/g, ''),
+            name: "EMPRESA LTDA",
+            city: "SAO PAULO",
+            amount: Number(amount),
+            message: description ? String(description).substr(0, 25) : "",
+            txid: id.replace(/-/g, '').slice(0, 35),
+          });
+          const qrPayload = typeof pix.payload === "function" ? pix.payload() : (pix?.getPayload ? pix.getPayload() : null);
 
-        const tx: PixTransaction = {
-          id,
-          amount,
-          key,
-          description,
-          status: 'pending',
-          qr: qrPayload,
-          createdAt: new Date(),
-        };
-        transactions.push(tx);
+          if (!qrPayload) {
+            throw new Error("Função de geração do Pix payload não encontrada.");
+          }
 
-        return res.json({
-          id: tx.id,
-          qr: tx.qr,
-          status: tx.status,
-          createdAt: tx.createdAt,
-          amount: tx.amount,
-          key: tx.key,
-          description: tx.description,
-        });
+          const tx: PixTransaction = {
+            id,
+            amount,
+            key,
+            description,
+            status: 'pending',
+            qr: qrPayload,
+            createdAt: new Date(),
+          };
+          transactions.push(tx);
+
+          return res.json({
+            id: tx.id,
+            qr: tx.qr,
+            status: tx.status,
+            createdAt: tx.createdAt,
+            amount: tx.amount,
+            key: tx.key,
+            description: tx.description,
+          });
+        } catch(err: any) {
+          return res.status(500).json({ error: "Erro ao gerar QR Pix", details: err?.message });
+        }
       }
 
       if (action === 'confirm' && req.body.id) {
