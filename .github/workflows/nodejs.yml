@@ -76,13 +76,22 @@ jobs:
   deploy:
     needs: [build, security]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Evita deploys de PRs e cron
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
 
       - name: Instalar Vercel CLI
         run: npm install -g vercel
+
+      # Se precisar de build antes do deploy, descomente:
+      # - name: Build do projeto
+      #   run: npm run build
+
+      # Se usar .env para variáveis do Vercel, descomente:
+      # - name: Gerar .env de produção (opcional)
+      #   run: |
+      #     echo "API_URL=https://api.seusite.com" > .env
 
       - name: Deploy para Vercel
         run: vercel --prod --yes --token="NF6RQEC7xyNMFnzv0cTwpmFE"
