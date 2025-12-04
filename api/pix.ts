@@ -2,8 +2,6 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { v4 as uuidv4 } from 'uuid';
 
 const qrcodePix = require('qrcode-pix');
-
-// Detecta exportação Pix corretamente: QrCodePix para v5.0.0
 let PixClass: any = null;
 if (typeof qrcodePix === "function") {
   PixClass = qrcodePix;
@@ -12,7 +10,6 @@ if (typeof qrcodePix === "function") {
 } else if ("default" in qrcodePix && "QrCodePix" in qrcodePix.default && typeof qrcodePix.default.QrCodePix === "function") {
   PixClass = qrcodePix.default.QrCodePix;
 } else {
-  // fallback: função principal
   PixClass = qrcodePix;
 }
 
@@ -35,17 +32,20 @@ function validatePixConfig(pixConfig: any) {
   if (!pixConfig.key || typeof pixConfig.key !== 'string' || pixConfig.key.length < 8) {
     return "Chave PIX inválida ou muito curta.";
   }
-  if (!pixConfig.name || typeof pixConfig.name !== 'string' || pixConfig.name.length < 1) {
-    return "Razão social/nome obrigatória.";
+  if (!pixConfig.name || typeof pixConfig.name !== 'string' || pixConfig.name.length < 1 || pixConfig.name.length > 30) {
+    return "Razão social/nome obrigatória (máx 30 caract).";
   }
-  if (!pixConfig.city || typeof pixConfig.city !== 'string' || pixConfig.city.length < 1) {
-    return "Cidade obrigatória.";
+  if (!pixConfig.city || typeof pixConfig.city !== 'string' || pixConfig.city.length < 1 || pixConfig.city.length > 15) {
+    return "Cidade obrigatória (máx 15 caract).";
   }
-  if (!pixConfig.txid || typeof pixConfig.txid !== 'string' || pixConfig.txid.length < 1) {
-    return "TXID obrigatório.";
+  if (!pixConfig.txid || typeof pixConfig.txid !== 'string' || pixConfig.txid.length < 1 || pixConfig.txid.length > 35) {
+    return "TXID obrigatório (máx 35 caract).";
   }
-  if (!pixConfig.amount || (typeof pixConfig.amount !== 'string' && typeof pixConfig.amount !== 'number') || Number(pixConfig.amount) <= 0) {
+  if (!pixConfig.amount || typeof pixConfig.amount !== 'string' || Number(pixConfig.amount) <= 0) {
     return "Valor PIX inválido.";
+  }
+  if (pixConfig.message && typeof pixConfig.message !== 'string') {
+    return "Message deve ser texto.";
   }
   return null;
 }
@@ -88,13 +88,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           parsedPixKey = parsedPixKey.replace(/\D/g, '');
         }
 
-        // Monta configuração SEM keyType!
         const pixConfig: any = {
           key: parsedPixKey,
           name: String(nome_fantasia || "EMPRESA LTDA").substring(0, 30),
           city: String(cidade || "SAO PAULO").substring(0, 15),
-          amount: Number(amount),
-          message: description ? String(description).substr(0, 25) : "",
+          amount: String(amount),   // <---- SEMPRE string!
+          message: description ? String(description).substring(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
         };
 
@@ -105,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let pixObj: any;
         try {
-          pixObj = PixClass(pixConfig); // Não use 'new'!
+          pixObj = PixClass(pixConfig); // nunca "new"
           if (!pixObj) {
             throw new Error("PixClass não retornou objeto válido. Config utilizado: " + JSON.stringify(pixConfig));
           }
@@ -120,7 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
           const tx: PixTransaction = {
             id,
-            amount: Number(amount),
+            amount: Number(amount), // Mantém número para a resposta
             key: parsedPixKey,
             description,
             nome_fantasia: pixConfig.name,
@@ -152,7 +151,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               description,
               nome_fantasia,
               cidade,
-              txid: id.replace(/-/g, '').slice(0, 35),
+              txid: pixConfig.txid,
               pixObj: typeof pixObj !== 'undefined' ? pixObj : null,
               pixConfig
             }
