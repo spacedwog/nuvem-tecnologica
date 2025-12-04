@@ -7,8 +7,9 @@ on:
     - cron: "0 3 * * 1" # Executa build automatizado toda segunda-feira (opcional)
 
 permissions:
-  contents: read
-  security-events: write
+  contents: write            # Necessário para upload de artefatos e deploy
+  actions: write             # Necessário para interação com workflow (ex: CodeQL, upload-artifact)
+  security-events: write     # Permite reportar eventos de segurança (CodeQL, npm audit)
 
 jobs:
   build:
