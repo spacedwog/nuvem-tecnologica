@@ -27,27 +27,31 @@ import { ConsultaCNPJService } from './src/services/ConsultaCNPJService';
 import { ESP32Service } from './src/services/ESP32Service';
 
 // ENDPOINT DA API PIX
-const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix"; // Altere para a URL do seu backend
+const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
 
-// Funções para chamar API PIX
+// Funções para chamar API PIX (corrigida para endpoint correto)
 async function criarPix(amount: number, key: string, description?: string) {
-  const res = await fetch(`${PIX_API}/initiate`, {
+  const res = await fetch(PIX_API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ amount, key, description }),
+    body: JSON.stringify({ action: "initiate", amount, key, description }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 async function statusPix(id: string) {
-  const res = await fetch(`${PIX_API}/status/${id}`);
+  const res = await fetch(`${PIX_API}?action=status&id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 async function confirmarPix(id: string) {
-  const res = await fetch(`${PIX_API}/confirm/${id}`, { method: "POST" });
+  const res = await fetch(PIX_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "confirm", id }),
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
