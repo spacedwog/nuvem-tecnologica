@@ -69,6 +69,9 @@ async function confirmarPix(id: string) {
   return res.json();
 }
 
+// Regex para valor Pix e função para fixar decimal no padrão Pix
+const PIX_AMOUNT_REGEX = /^\d{1,13}(\.\d{1,2})?$/;
+
 // ---------- App Component ----------
 export default function App() {
   // Estados principais
@@ -93,7 +96,8 @@ export default function App() {
   const [pixQr, setPixQr] = useState<string | null>(null);
   const [pixId, setPixId] = useState<string | null>(null);
   const [pixStatus, setPixStatus] = useState<string | null>(null);
-  const [pixAmount, setPixAmount] = useState<number>(0);
+  // Troque o campo de valor Pix por string para permitir controle e regex!
+  const [pixAmountText, setPixAmountText] = useState<string>('');
   const [pixDesc, setPixDesc] = useState<string>("");
 
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
@@ -265,22 +269,44 @@ export default function App() {
   }
 
   // ---------- PIX: Funções ----------
+  // Função para tratar cobrança Pix, usando regex no valor
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
-      // Use o CNPJ sem máscara no frontend e backend:
+      setErrorMsg(null);
+
+      // Limpa, converte ',' para '.', só aceita dígitos e ponto
+      let valorRaw = pixAmountText.replace(/,/g, '.').replace(/[^\d.]/g, '');
+
+      // Permite apenas um ponto decimal, limita integral/decimal
+      const parts = valorRaw.split('.');
+      let valConsolidado =
+        parts.length > 1
+          ? parts[0].slice(0, 13) + '.' + parts[1].slice(0, 2)
+          : parts[0].slice(0, 13);
+
+      // Remove zeros à esquerda exceto se antes do ponto
+      valConsolidado = valConsolidado.replace(/^0+(?!\.)/, '') || '0';
+
+      // Validação regex e valor mínimo Pix permitido
+      if (!PIX_AMOUNT_REGEX.test(valConsolidado) || Number(valConsolidado) <= 0) {
+        setErrorMsg('Valor inválido! Use até 2 casas decimais, com ponto, mínimo R$0.01');
+        setIsLoading(false);
+        return;
+      }
+
+      // Formata para padrão Pix fixo (duas casas decimais)
+      const valorPix = Number(valConsolidado).toFixed(2);
+
       const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
       const descPix = pixDesc || "Pagamento Spacecworp";
-      // Adiciona nome_fantasia e cidade:
       const resp = await criarPix(
-        pixAmount,
+        Number(valorPix),
         keyPix,
         descPix,
         empresa?.dados?.fantasia || "",
         empresa?.dados?.municipio || ""
       );
-
-      console.log("PIX API Response", resp);
 
       if (!resp.qr || typeof resp.qr !== "string" || resp.qr.length < 10) {
         setLog((prev) => [
@@ -297,7 +323,6 @@ export default function App() {
     } catch (e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro ao criar PIX: " + e.message, "error")]);
       setPixQr(null);
-      console.error("PIX API error", e);
     } finally {
       setIsLoading(false);
     }
@@ -604,28 +629,38 @@ export default function App() {
 
         {/* Formulário PIX */}
         <View style={{ marginTop: 18, alignSelf: "stretch", padding: 14, backgroundColor: "#f8fafc", borderRadius: 8, borderWidth: 1, borderColor: "#d5e4f7" }}>
-          <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
-          <TextInput
-            style={[styles.inputText, { marginBottom: 8 }]}
-            value={pixAmount.toString()}
-            onChangeText={v => setPixAmount(Number(v.replace(/[^\d.]/g, "")))}
-            placeholder="Valor (R$)"
-            keyboardType="numeric"
-          />
-          <TextInput
-            style={[styles.inputText, { marginBottom: 8 }]}
-            value={pixDesc}
-            onChangeText={setPixDesc}
-            placeholder="Descrição"
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, { alignSelf: "center" }]}
-            onPress={handleCobrarPix}
-            disabled={isLoading || pixAmount <= 0}
-          >
-            <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
+        <TextInput
+          style={[styles.inputText, { marginBottom: 8 }]}
+          value={pixAmountText}
+          onChangeText={v => {
+            // Permite somente números e ponto, apenas 1 ponto e 2 casas decimais
+            let valor = v.replace(/,/g, '.').replace(/[^\d.]/g, '');
+            const parts = valor.split('.');
+            let final =
+              parts.length > 1
+                ? parts[0].slice(0, 13) + '.' + parts[1].slice(0, 2)
+                : parts[0].slice(0, 13);
+            setPixAmountText(final);
+          }}
+          placeholder="Valor (R$)"
+          keyboardType="decimal-pad"
+        />
+        <TextInput
+          style={[styles.inputText, { marginBottom: 8 }]}
+          value={pixDesc}
+          onChangeText={setPixDesc}
+          placeholder="Descrição"
+        />
+        <TouchableOpacity
+          style={[styles.sendButton, { alignSelf: "center" }]}
+          onPress={handleCobrarPix}
+          disabled={isLoading || Number(pixAmountText) <= 0}
+        >
+          <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
+        </TouchableOpacity>
+        {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
+      </View>
 
         <TouchableOpacity
           style={{

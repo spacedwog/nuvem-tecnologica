@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { v4 as uuidv4 } from 'uuid';
 
-const { QrCodePix } = require('qrcode-pix'); // Importação correta
+const { QrCodePix } = require('qrcode-pix');
 
 interface PixTransaction {
   id: string;
@@ -18,7 +18,6 @@ interface PixTransaction {
 
 const transactions: PixTransaction[] = [];
 
-// Validação dos campos obrigatórios do QR Pix
 function validatePixConfig(pixConfig: any) {
   if (!pixConfig.key || typeof pixConfig.key !== 'string' || pixConfig.key.length < 8) {
     return "Chave PIX inválida ou muito curta.";
@@ -32,7 +31,8 @@ function validatePixConfig(pixConfig: any) {
   if (!pixConfig.txid || typeof pixConfig.txid !== 'string' || pixConfig.txid.length < 1 || pixConfig.txid.length > 35) {
     return "TXID obrigatório (máx 35 caract).";
   }
-  if (!pixConfig.amount || typeof pixConfig.amount !== 'string' || Number(pixConfig.amount) <= 0) {
+  // Garante que amount esteja no formato '100.00'
+  if (!pixConfig.amount || typeof pixConfig.amount !== 'string' || isNaN(Number(pixConfig.amount)) || Number(pixConfig.amount) <= 0) {
     return "Valor PIX inválido.";
   }
   if (pixConfig.message && typeof pixConfig.message !== 'string') {
@@ -64,23 +64,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(400).json({ error: "amount e chave PIX obrigatórios" });
 
         const id = uuidv4();
-
         const pixKeyTrimmed = typeof key === "string" ? key.trim() : "";
         if (!pixKeyTrimmed || pixKeyTrimmed.length < 8) {
           return res.status(400).json({ error: "Chave PIX inválida ou muito curta." });
         }
-
         let parsedPixKey = pixKeyTrimmed;
         if (/^\d{11}$/.test(parsedPixKey) || /^\d{14}$/.test(parsedPixKey)) {
           parsedPixKey = parsedPixKey.replace(/\D/g, '');
         }
 
+        // O ajuste: valor para QR deve ser formatado decimal com ponto!
+        const amountQR = typeof amount === 'number'
+          ? amount.toFixed(2)
+          : Number(amount).toFixed(2);
+
         const pixConfig: any = {
-          version: "01", // Campo obrigatório para qrcode-pix@5.0.0
+          version: "01",
           key: parsedPixKey,
           name: String(nome_fantasia || "EMPRESA LTDA").substring(0, 30),
           city: String(cidade || "SAO PAULO").substring(0, 15),
-          amount: String(amount),
+          amount: amountQR,
           message: description ? String(description).substring(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
         };
