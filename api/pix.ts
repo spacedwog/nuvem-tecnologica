@@ -76,22 +76,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           parsedPixKey = parsedPixKey.replace(/\D/g, '');
         }
 
+        // Configuração do Pix
+        const pixConfig = {
+          key: parsedPixKey,
+          name: "EMPRESA LTDA",
+          city: "SAO PAULO",
+          amount: Number(amount),
+          message: description ? String(description).substr(0, 25) : "",
+          txid: id.replace(/-/g, '').slice(0, 35),
+        };
+
         let pixObj: any;
         try {
-          pixObj = new PixClass({
-            key: parsedPixKey,
-            name: "EMPRESA LTDA",
-            city: "SAO PAULO",
-            amount: Number(amount),
-            message: description ? String(description).substr(0, 25) : "",
-            txid: id.replace(/-/g, '').slice(0, 35),
-          });
+          pixObj = new PixClass(pixConfig);
+
+          // Defesa extra: PixClass pode retornar null/undefined
+          if (!pixObj) {
+            throw new Error("PixClass não retornou objeto válido. Config utilizado: " + JSON.stringify(pixConfig));
+          }
+
+          // Gera o payload: pode ser método payload() ou getPayload()
           const qrPayload = typeof pixObj.payload === "function"
             ? pixObj.payload()
             : (typeof pixObj.getPayload === "function" ? pixObj.getPayload() : null);
 
           if (!qrPayload) {
-            throw new Error("Função de geração do Pix payload não encontrada.");
+            throw new Error("Função de geração do Pix payload não encontrada ou retornou valor inválido.");
           }
 
           const tx: PixTransaction = {
@@ -123,7 +133,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               amount,
               description,
               txid: id.replace(/-/g, '').slice(0, 35),
-              pixObj: typeof pixObj !== 'undefined' ? pixObj : null
+              pixObj: typeof pixObj !== 'undefined' ? pixObj : null,
+              pixConfig
             }
           });
         }
