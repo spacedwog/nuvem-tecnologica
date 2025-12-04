@@ -27,7 +27,7 @@ import { ConsultaCNPJService } from './src/services/ConsultaCNPJService';
 import { ESP32Service } from './src/services/ESP32Service';
 
 // ENDPOINT DA API PIX
-const PIX_API = "http://localhost:4444/api/pix"; // Altere para a URL do seu backend
+const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix"; // Altere para a URL do seu backend
 
 // Funções para chamar API PIX
 async function criarPix(amount: number, key: string, description?: string) {
