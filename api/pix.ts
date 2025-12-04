@@ -1,12 +1,20 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { v4 as uuidv4 } from 'uuid';
 
+// Importação flexível do qrcode-pix, cobre todos os modos de export (CommonJS/ESM)
 const qrcodePix = require('qrcode-pix');
 
-// Detecta exportação Pix corretamente
-const PixClass =
-  qrcodePix.Pix ? qrcodePix.Pix :
-  (qrcodePix.default && qrcodePix.default.Pix ? qrcodePix.default.Pix : null);
+// Detecta exportação Pix corretamente em TODAS as formas possíveis
+let PixClass: any = null;
+if (typeof qrcodePix === "function") {
+  PixClass = qrcodePix;
+} else if (qrcodePix.Pix && typeof qrcodePix.Pix === "function") {
+  PixClass = qrcodePix.Pix;
+} else if (qrcodePix.default && typeof qrcodePix.default === "function") {
+  PixClass = qrcodePix.default;
+} else if (qrcodePix.default && qrcodePix.default.Pix && typeof qrcodePix.default.Pix === "function") {
+  PixClass = qrcodePix.default.Pix;
+}
 
 interface PixTransaction {
   id: string;
@@ -42,15 +50,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const id = uuidv4();
 
+        // Validação robusta
         if (!PixClass) {
-          return res.status(500).json({ error: "Biblioteca Pix não está disponível (export problem)" });
+          return res.status(500).json({
+            error: "Biblioteca Pix não está disponível (export problem)",
+            debug: { typeof: typeof qrcodePix, keys: Object.keys(qrcodePix) }
+          });
         }
 
-        // Gera BRCode Pix
+        // Gera BR Code Pix válido
         const pix = new PixClass({
           key: key.replace(/\D/g, ''),
-          name: "EMPRESA LTDA",
-          city: "SAO PAULO",
+          name: "EMPRESA LTDA", // Troque pelo nome real da empresa
+          city: "SAO PAULO",   // Troque pela cidade real
           amount: Number(amount),
           message: description ? String(description).substr(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
