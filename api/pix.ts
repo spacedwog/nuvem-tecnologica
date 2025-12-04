@@ -45,6 +45,26 @@ function getPixKeyType(key: string): "cpf" | "cnpj" | "email" | "phone" | "rando
   return undefined;
 }
 
+// Função utilitária para validação das configurações do Pix
+function validatePixConfig(pixConfig: any) {
+  if (!pixConfig.key || typeof pixConfig.key !== 'string' || pixConfig.key.length < 8) {
+    return "Chave PIX inválida ou muito curta.";
+  }
+  if (!pixConfig.name || typeof pixConfig.name !== 'string' || pixConfig.name.length < 1) {
+    return "Razão social/nome obrigatória.";
+  }
+  if (!pixConfig.city || typeof pixConfig.city !== 'string' || pixConfig.city.length < 1) {
+    return "Cidade obrigatória.";
+  }
+  if (!pixConfig.txid || typeof pixConfig.txid !== 'string' || pixConfig.txid.length < 1) {
+    return "TXID obrigatório.";
+  }
+  if (!pixConfig.amount || typeof pixConfig.amount !== 'number' || pixConfig.amount <= 0) {
+    return "Valor PIX inválido.";
+  }
+  return null;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     if (req.method === 'GET') {
@@ -98,6 +118,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
         if (keyType) {
           pixConfig.keyType = keyType;
+        }
+
+        // ------- Adiciona validação dos campos obrigatórios -------
+        const errorMsg = validatePixConfig(pixConfig);
+        if (errorMsg) {
+          return res.status(400).json({ error: errorMsg, pixConfig });
         }
 
         let pixObj: any;
