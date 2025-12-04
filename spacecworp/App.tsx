@@ -255,7 +255,7 @@ export default function App() {
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
-      const keyPix = empresa?.dados?.email || "exemplo@chave.com";
+      const keyPix = empresa?.cnpj || "00.000.000/0000-00";
       const descPix = pixDesc || "Pagamento Spacecworp";
       const resp = await criarPix(pixAmount, keyPix, descPix);
       setPixQr(resp.qr);
@@ -729,59 +729,67 @@ export default function App() {
         onRequestClose={() => setPixQr(null)}
       >
         <View style={modalStyles.wrapper}>
-          <View style={[modalStyles.modalCard, { justifyContent: 'flex-start', minHeight: 320, paddingBottom: 32 }]}>
-            <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
+          <View
+            style={[
+              modalStyles.modalCard,
+              {
+                justifyContent: 'space-between',
+                minHeight: 420,
+                maxHeight: Dimensions.get('window').height * 0.88,
+              },
+            ]}
+          >
+            <View>
+              <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
 
-            {/* Chave PIX */}
-            <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave:</Text>
-            <Text style={{ marginBottom: 8 }}>
-              {empresa?.dados?.email || "exemplo@chave.com"}
-            </Text>
+              {/* Chave PIX */}
+              <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave (CNPJ):</Text>
+              <Text style={{ marginBottom: 8 }}>
+                {empresa?.cnpj || "00.000.000/0000-00"}
+              </Text>
 
-            {/* QR Code */}
-            <Text style={{ fontWeight: "bold" }}>QR Code:</Text>
-            <Text
-              selectable
-              style={{ padding: 10, backgroundColor: "#f4f7fb", borderRadius: 8 }}
-            >
-              {pixQr}
-            </Text>
-
-            {/* Status */}
-            <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
-            <Text>{pixStatus}</Text>
-
-            {/* Ações */}
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-around",
-                marginVertical: 12,
-              }}
-            >
-              <TouchableOpacity
-                style={modalStyles.modalPaginationBtn}
-                onPress={handleStatusPix}
+              {/* QR Code */}
+              <Text style={{ fontWeight: "bold" }}>QR Code:</Text>
+              <Text
+                selectable
+                style={{ padding: 10, backgroundColor: "#f4f7fb", borderRadius: 8 }}
               >
-                <Text style={modalStyles.pgBtnText}>Atualizar Status</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={modalStyles.modalPaginationBtn}
-                onPress={handleConfirmPix}
+                {pixQr}
+              </Text>
+
+              {/* Status */}
+              <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
+              <Text>{pixStatus}</Text>
+
+              {/* Ações */}
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-around",
+                  marginVertical: 12,
+                }}
               >
-                <Text style={modalStyles.pgBtnText}>Confirmar Pagamento</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={modalStyles.modalPaginationBtn}
+                  onPress={handleStatusPix}
+                >
+                  <Text style={modalStyles.pgBtnText}>Atualizar Status</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={modalStyles.modalPaginationBtn}
+                  onPress={handleConfirmPix}
+                >
+                  <Text style={modalStyles.pgBtnText}>Confirmar Pagamento</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-
-            {/* botão FECHAR no fundo */}
-            <View style={{ flex: 1, justifyContent: 'flex-end' }}>
-              <TouchableOpacity
-                style={[modalStyles.closeModalBtn, { marginTop: 16, alignSelf: 'center' }]}
-                onPress={() => setPixQr(null)}
-              >
-                <Text style={modalStyles.closeModalText}>Fechar</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Botão FECHAR sempre ao bottom */}
+            <TouchableOpacity
+              style={[modalStyles.closeModalBtn, { marginTop: 8, alignSelf: 'center' }]}
+              onPress={() => setPixQr(null)}
+            >
+              <Text style={modalStyles.closeModalText}>Fechar</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -898,10 +906,10 @@ const styles = StyleSheet.create({
 const modalStyles = StyleSheet.create({
   wrapper: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center' },
   modalCard: {
-    width: '95%',
+    width: '92%',
     maxWidth: 450,
     minHeight: 320,
-    maxHeight: Dimensions.get('window').height * 0.88,
+    maxHeight: Dimensions.get('window').height * 1,
     backgroundColor: '#fff',
     borderRadius: 18,
     padding: 21,
