@@ -1,6 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node'
 import { v4 as uuidv4 } from 'uuid'
-import { Pix } from 'qrcode-pix'
+import Pix from 'qrcode-pix'
 
 interface PixTransaction {
   id: string;
@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Gera um BR Code PIX válido usando o CNPJ (sem máscara/pontuação)
       // Exemplos para city e name: personalize conforme deseja
-      const pix = Pix({
+      const pix = new Pix.Pix({
         key: key.replace(/\D/g, ''), // Deve ser apenas digitos do CNPJ!
         name: "EMPRESA LTDA",         // Nome do recebedor (até 25 caracteres)
         city: "SAO PAULO",            // Cidade (até 15 caracteres, caixa alta, sem acentos)
