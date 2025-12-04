@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { v4 as uuidv4 } from 'uuid';
 
-const { QrCodePix } = require('qrcode-pix'); // <-- Corretíssimo!
+const { QrCodePix } = require('qrcode-pix'); // Importação correta
 
 interface PixTransaction {
   id: string;
@@ -18,6 +18,7 @@ interface PixTransaction {
 
 const transactions: PixTransaction[] = [];
 
+// Validação dos campos obrigatórios do QR Pix
 function validatePixConfig(pixConfig: any) {
   if (!pixConfig.key || typeof pixConfig.key !== 'string' || pixConfig.key.length < 8) {
     return "Chave PIX inválida ou muito curta.";
@@ -36,6 +37,9 @@ function validatePixConfig(pixConfig: any) {
   }
   if (pixConfig.message && typeof pixConfig.message !== 'string') {
     return "Message deve ser texto.";
+  }
+  if (!pixConfig.version || typeof pixConfig.version !== 'string') {
+    return "Campo 'version' obrigatório (ex: '01').";
   }
   return null;
 }
@@ -72,10 +76,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const pixConfig: any = {
+          version: "01", // Campo obrigatório para qrcode-pix@5.0.0
           key: parsedPixKey,
           name: String(nome_fantasia || "EMPRESA LTDA").substring(0, 30),
           city: String(cidade || "SAO PAULO").substring(0, 15),
-          amount: String(amount),   // <-- SEMPRE STRING!
+          amount: String(amount),
           message: description ? String(description).substring(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
         };
@@ -87,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         let pixObj: any;
         try {
-          pixObj = QrCodePix(pixConfig); // <-- Função direta!
+          pixObj = QrCodePix(pixConfig);
           if (!pixObj) {
             throw new Error("QrCodePix não retornou objeto válido. Config utilizado: " + JSON.stringify(pixConfig));
           }
