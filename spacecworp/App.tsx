@@ -31,21 +31,21 @@ const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
 
 // Funções para chamar API PIX (corrigida para endpoint correto)
 async function criarPix(amount: number, key: string, description?: string) {
+  // Certifique-se que o CNPJ vai SEM MÁSCARA para o backend:
+  const keySemMascara = key.replace(/\D/g, '');
   const res = await fetch(PIX_API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "initiate", amount, key, description }),
+    body: JSON.stringify({ action: "initiate", amount, key: keySemMascara, description }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-
 async function statusPix(id: string) {
   const res = await fetch(`${PIX_API}?action=status&id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-
 async function confirmarPix(id: string) {
   const res = await fetch(PIX_API, {
     method: "POST",
@@ -255,15 +255,30 @@ export default function App() {
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
-      const keyPix = empresa?.cnpj || "00.000.000/0000-00";
+      // Use o CNPJ sem máscara no frontend e backend:
+      const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
       const descPix = pixDesc || "Pagamento Spacecworp";
       const resp = await criarPix(pixAmount, keyPix, descPix);
+
+      console.log("PIX API Response", resp); // <-- para debug
+
+      // Exibe resposta Pix/erro no log para diagnósticos
+      if (!resp.qr || typeof resp.qr !== "string" || resp.qr.length < 10) {
+        setLog((prev) => [
+          ...prev,
+          new LogEntry("QR Code PIX inválido ou não retornado!", "error"),
+        ]);
+        setPixQr(null);
+        return;
+      }
       setPixQr(resp.qr);
       setPixId(resp.id);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Cobrança PIX criada!", "success")]);
-    } catch(e: any) {
+    } catch (e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro ao criar PIX: " + e.message, "error")]);
+      setPixQr(null);
+      console.error("PIX API error", e);
     } finally {
       setIsLoading(false);
     }
@@ -745,17 +760,14 @@ export default function App() {
               {/* Chave PIX */}
               <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave (CNPJ):</Text>
               <Text style={{ marginBottom: 8 }}>
-                {empresa?.cnpj || "00.000.000/0000-00"}
+                {empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000"}
               </Text>
 
-              {/* QR Code */}
-              <Text style={{ fontWeight: "bold" }}>QR Code:</Text>
-              <Text
-                selectable
-                style={{ padding: 10, backgroundColor: "#f4f7fb", borderRadius: 8 }}
-              >
-                {pixQr}
-              </Text>
+              {/* QR Code (BR Code texto) */}
+              <Text style={{ fontWeight: "bold" }}>QR Code (copia e cola):</Text>
+              <ScrollView style={{ maxHeight: 60, backgroundColor: "#f4f7fb", borderRadius: 8, marginBottom: 8, padding: 6 }}>
+                <Text selectable style={{ fontSize: 12 }}>{pixQr}</Text>
+              </ScrollView>
 
               {/* Status */}
               <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
@@ -783,7 +795,7 @@ export default function App() {
                 </TouchableOpacity>
               </View>
             </View>
-            {/* Botão FECHAR sempre ao bottom */}
+            {/* Botão FECHAR sempre ao fundo */}
             <TouchableOpacity
               style={[modalStyles.closeModalBtn, { marginTop: 8, alignSelf: 'center' }]}
               onPress={() => setPixQr(null)}
