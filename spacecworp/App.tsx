@@ -781,6 +781,7 @@ const styles = StyleSheet.create({
   sendRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18, justifyContent: 'center' },
   inputText: {
     flex: 1,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#aaa',
     borderRadius: 8,
