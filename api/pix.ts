@@ -59,7 +59,8 @@ function validatePixConfig(pixConfig: any) {
   if (!pixConfig.txid || typeof pixConfig.txid !== 'string' || pixConfig.txid.length < 1) {
     return "TXID obrigatório.";
   }
-  if (!pixConfig.amount || typeof pixConfig.amount !== 'number' || pixConfig.amount <= 0) {
+  // amount deve ser string agora!
+  if (!pixConfig.amount || typeof pixConfig.amount !== 'string' || Number(pixConfig.amount) <= 0) {
     return "Valor PIX inválido.";
   }
   return null;
@@ -104,23 +105,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           parsedPixKey = parsedPixKey.replace(/\D/g, '');
         }
 
-        // Detecta o tipo da chave para passar ao PixClass
-        const keyType = getPixKeyType(parsedPixKey);
-
         // Usa nome_fantasia e cidade (prioritários), senão valores fixos
         const pixConfig: any = {
           key: parsedPixKey,
           name: String(nome_fantasia || "EMPRESA LTDA").substring(0, 30),
           city: String(cidade || "SAO PAULO").substring(0, 15),
-          amount: Number(amount),
+          amount: String(amount),   // <-- Corrigido para string!
           message: description ? String(description).substr(0, 25) : "",
           txid: id.replace(/-/g, '').slice(0, 35),
         };
-        if (keyType) {
-          pixConfig.keyType = keyType;
-        }
+        // Removido keyType do objeto PixConfig!
 
-        // ------- Adiciona validação dos campos obrigatórios -------
+        // ------- Valida os campos obrigatórios -------
         const errorMsg = validatePixConfig(pixConfig);
         if (errorMsg) {
           return res.status(400).json({ error: errorMsg, pixConfig });
@@ -172,7 +168,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             details: err?.message,
             debug: {
               key: parsedPixKey,
-              keyType,
               amount,
               description,
               nome_fantasia,
