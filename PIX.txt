@@ -1,0 +1,17 @@
+# Como integrar a API PIX (Express + TypeScript) com a Vercel
+
+A Vercel é ótima para deploys **serverless** e APIs rápidas. Mas o Express tradicional exige adaptação: em Vercel, cada arquivo na pasta `api/` vira um endpoint. Abaixo está o **passo a passo e como adaptar sua API PIX para funcionar em Vercel**.
+
+---
+
+## 1. Estrutura de arquivos recomendada
+
+---
+
+## 2. Instale dependências
+
+Inclua as dependências mínimas (`express` não é necessário):
+
+```sh
+npm install uuid
+npm install --save-dev typescript
