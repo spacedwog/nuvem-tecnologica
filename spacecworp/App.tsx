@@ -26,7 +26,7 @@ import { ConsultaCNPJService } from './src/services/ConsultaCNPJService';
 import { ESP32Service } from './src/services/ESP32Service';
 
 const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
-
+const AUDIT_LOG_API = "https://nuvem-tecnologica.vercel.app/api/audit-log";
 function formatPixValue(input: string): string {
   let val = input.replace(/,/g, '.').replace(/[^\d.]/g, '');
   const parts = val.split('.');
@@ -62,8 +62,17 @@ type PixAudit = {
 };
 
 // Função genérica para log de auditoria Pix
-async function logPixAudit(event: string, details: Record<string, any> = {}, empresa: Empresa | null = null) {
-  // Para persistência no backend, implemente aqui.
+async function logPixAudit(event: string, details = {}, empresa: Empresa | null) {
+  await fetch(AUDIT_LOG_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event,
+      details,
+      timestamp: new Date().toISOString(),
+      user: empresa?.dados?.fantasia || empresa?.cnpj || 'anônimo'
+    })
+  });
 }
 
 async function criarPix(
