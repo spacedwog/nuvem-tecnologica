@@ -1,3 +1,4 @@
+// Adicione estes imports ao topo do arquivo
 import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
@@ -19,25 +20,43 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// ---------- POO Imports ----------
 import { Empresa } from './src/domain/Empresa';
 import { LogEntry } from './src/domain/LogEntry';
 import { StatusESP } from './src/domain/StatusESP';
 import { ConsultaCNPJService } from './src/services/ConsultaCNPJService';
 import { ESP32Service } from './src/services/ESP32Service';
 
-// ENDPOINT DA API PIX
+// Endpoint da API PIX
 const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
+
+// Função para aplicar máscara ao valor Pix durante a digitação
+function formatPixValue(input) {
+  let val = input.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const parts = val.split('.');
+  let intPart = parts[0].replace(/^0+/, '');
+  if (intPart === '') intPart = '0';
+  let decPart = parts[1] || '';
+  intPart = intPart.slice(0, 13);
+  decPart = decPart.slice(0, 2);
+  let formatted = intPart;
+  if (val.includes('.') || decPart) {
+    formatted += '.' + decPart;
+  }
+  // Se acabar com ponto, corrige para .00
+  if ((val.endsWith('.') || decPart.length < 2) && formatted.match(/^\d+\.$/)) {
+    formatted += '00'.slice(0, 2 - decPart.length);
+  }
+  return formatted;
+}
 
 // Funções para chamar API PIX (agora envia nome_fantasia e cidade)
 async function criarPix(
-  amount: number,
-  key: string,
-  description?: string,
-  nome_fantasia?: string,
-  cidade?: string
+  amount,
+  key,
+  description,
+  nome_fantasia,
+  cidade
 ) {
-  // Certifique-se que o CNPJ vai SEM MÁSCARA para o backend:
   const keySemMascara = key.replace(/\D/g, '');
   const res = await fetch(PIX_API, {
     method: "POST",
@@ -54,12 +73,12 @@ async function criarPix(
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-async function statusPix(id: string) {
+async function statusPix(id) {
   const res = await fetch(`${PIX_API}?action=status&id=${encodeURIComponent(id)}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
-async function confirmarPix(id: string) {
+async function confirmarPix(id) {
   const res = await fetch(PIX_API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -69,44 +88,43 @@ async function confirmarPix(id: string) {
   return res.json();
 }
 
-// Regex para valor Pix e função para fixar decimal no padrão Pix
 const PIX_AMOUNT_REGEX = /^\d{1,13}(\.\d{1,2})?$/;
 
-// ---------- App Component ----------
+// App Component
 export default function App() {
   // Estados principais
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [cnpj, setCnpj] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [empresa, setEmpresa] = useState<Empresa | null>(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [successMsg, setSuccessMsg] = useState(null);
+  const [empresa, setEmpresa] = useState(null);
 
   const [modalPage, setModalPage] = useState(0);
   const [modalCnpjVisible, setModalCnpjVisible] = useState(false);
   const [modalLogVisible, setModalLogVisible] = useState(false);
 
-  const [log, setLog] = useState<LogEntry[]>([]);
-  const [status, setStatus] = useState<StatusESP | null>(null);
+  const [log, setLog] = useState([]);
+  const [status, setStatus] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [textToSend, setTextToSend] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   // Estados PIX
-  const [pixQr, setPixQr] = useState<string | null>(null);
-  const [pixId, setPixId] = useState<string | null>(null);
-  const [pixStatus, setPixStatus] = useState<string | null>(null);
-  // Troque o campo de valor Pix por string para permitir controle e regex!
-  const [pixAmountText, setPixAmountText] = useState<string>('');
-  const [pixDesc, setPixDesc] = useState<string>("");
+  const [pixQr, setPixQr] = useState(null);
+  const [pixId, setPixId] = useState(null);
+  const [pixStatus, setPixStatus] = useState(null);
+  // Campo de valor Pix agora tem máscara
+  const [pixAmountText, setPixAmountText] = useState('');
+  const [pixDesc, setPixDesc] = useState("");
 
-  const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
+  const notificationsPolling = useRef(null);
 
   const logoAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // ----- Splash -----
+  // Splash
   useEffect(() => {
     Animated.parallel([
       Animated.timing(logoAnim, { toValue: 1, duration: 950, useNativeDriver: true }),
@@ -114,7 +132,7 @@ export default function App() {
     ]).start();
   }, []);
 
-  // ----- Funções de Login -----
+  // Login
   function handleLogout() {
     Alert.alert("Logout", "Deseja sair do aplicativo?", [
       { text: "Cancelar", style: "cancel" },
@@ -129,7 +147,7 @@ export default function App() {
     ]);
   }
 
-  function handleChangeCNPJ(text: string) {
+  function handleChangeCNPJ(text) {
     setErrorMsg(null);
     setSuccessMsg(null);
     setCnpj(Empresa.maskCNPJ(text));
@@ -153,15 +171,15 @@ export default function App() {
       setIsLoading(false);
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
       setTimeout(() => setIsLoggedIn(true), 900);
-    } catch (e: any) {
+    } catch (e) {
       setErrorMsg('CNPJ não encontrado ou inválido! ' + e.message);
       setEmpresa(null);
       setIsLoading(false);
     }
   }
 
-  // ----- Modal Controle -----
-  function openModalPage(page: number = 0) {
+  // Modal Controle
+  function openModalPage(page = 0) {
     setModalPage(page);
     setModalCnpjVisible(true);
   }
@@ -171,14 +189,14 @@ export default function App() {
   function openModalLog() { setModalLogVisible(true); }
   function closeModalLog() { setModalLogVisible(false); }
 
-  // ----- Notificações (Polling) -----
+  // Notificações (Polling)
   useEffect(() => {
     async function pollNotifications() {
       if (!isConnected) return;
       const notifs = await ESP32Service.fetchNotifications();
       setLog(prev => {
         const allTimes = new Set(prev.map(l => l.time + l.msg));
-        const news = notifs.filter((n: any) => !allTimes.has(n.time + n.msg));
+        const news = notifs.filter((n) => !allTimes.has(n.time + n.msg));
         if (news.length === 0) return prev;
         return [...prev, ...news];
       });
@@ -193,7 +211,7 @@ export default function App() {
     }
   }, [isConnected]);
 
-  // ----- Funções VESPA -----
+  // Funções VESPA
   async function handleReload() {
     setRefreshing(true);
     try {
@@ -208,7 +226,7 @@ export default function App() {
           ...prev, new LogEntry("Não conectado: nada para atualizar.", "info")
         ]);
       }
-    } catch (e: any) {
+    } catch (e) {
       setLog((prev) => [...prev, new LogEntry("Erro ao atualizar status: " + e.message, "error")]);
     }
     setRefreshing(false);
@@ -221,13 +239,13 @@ export default function App() {
       setStatus(new StatusESP(s));
       setIsConnected(true);
       setLog((prev) => [...prev, new LogEntry("Conectado!", "success")]);
-    } catch (e: any) {
+    } catch (e) {
       setIsConnected(false);
       setLog((prev) => [...prev, new LogEntry(e.message, "error")]);
     }
   }
 
-  async function handleSendData(cmd?: string) {
+  async function handleSendData(cmd) {
     if (!isConnected) {
       setLog((prev) => [...prev, new LogEntry("Não está conectado ao ESP32-CAM.", "error")]);
       return;
@@ -238,7 +256,7 @@ export default function App() {
     try {
       const resp = await ESP32Service.sendCommand(toSend);
       setLog((prev) => [...prev, new LogEntry("Resposta: " + resp, "received")]);
-    } catch (e: any) {
+    } catch (e) {
       setLog((prev) => [...prev, new LogEntry(e.message, "error")]);
     } finally {
       if (cmd === undefined) setTextToSend('');
@@ -263,39 +281,33 @@ export default function App() {
     try {
       await ESP32Service.sendCompanyDataToVespa(empresa.dados);
       setLog((prev) => [...prev, new LogEntry("Dados empresariais enviados com sucesso!", "success")]);
-    } catch (e: any) {
+    } catch (e) {
       setLog((prev) => [...prev, new LogEntry("Falha ao enviar dados: " + (e.message || e), "error")]);
     }
   }
 
-  // ---------- PIX: Funções ----------
-  // Função para tratar cobrança Pix, usando regex no valor
+  // PIX: Funções
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
       setErrorMsg(null);
 
-      // Limpa, converte ',' para '.', só aceita dígitos e ponto
       let valorRaw = pixAmountText.replace(/,/g, '.').replace(/[^\d.]/g, '');
 
-      // Permite apenas um ponto decimal, limita integral/decimal
       const parts = valorRaw.split('.');
       let valConsolidado =
         parts.length > 1
           ? parts[0].slice(0, 13) + '.' + parts[1].slice(0, 2)
           : parts[0].slice(0, 13);
 
-      // Remove zeros à esquerda exceto se antes do ponto
       valConsolidado = valConsolidado.replace(/^0+(?!\.)/, '') || '0';
 
-      // Validação regex e valor mínimo Pix permitido
       if (!PIX_AMOUNT_REGEX.test(valConsolidado) || Number(valConsolidado) <= 0) {
         setErrorMsg('Valor inválido! Use até 2 casas decimais, com ponto, mínimo R$0.01');
         setIsLoading(false);
         return;
       }
 
-      // Formata para padrão Pix fixo (duas casas decimais)
       const valorPix = Number(valConsolidado).toFixed(2);
 
       const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
@@ -320,7 +332,7 @@ export default function App() {
       setPixId(resp.id);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Cobrança PIX criada!", "success")]);
-    } catch (e: any) {
+    } catch (e) {
       setLog((prev) => [...prev, new LogEntry("Erro ao criar PIX: " + e.message, "error")]);
       setPixQr(null);
     } finally {
@@ -334,7 +346,7 @@ export default function App() {
       const resp = await statusPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Status PIX: " + resp.status, "info")]);
-    } catch(e: any) {
+    } catch(e) {
       setLog((prev) => [...prev, new LogEntry("Erro status PIX: " + e.message, "error")]);
     }
   }
@@ -345,12 +357,11 @@ export default function App() {
       const resp = await confirmarPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Pagamento PIX confirmado!", "success")]);
-    } catch(e: any) {
+    } catch(e) {
       setLog((prev) => [...prev, new LogEntry("Erro ao confirmar PIX: " + e.message, "error")]);
     }
   }
 
-  // ----- Páginas do Modal -----
   const MODAL_PAGES = [
     "empresa",
     "enderecos",
@@ -359,7 +370,7 @@ export default function App() {
     "socios",
     "extra"
   ];
-  function getModalPagesData(e: Empresa | null) {
+  function getModalPagesData(e) {
     if (!e) return [];
     const cnpjDados = e.dados;
     return [
@@ -422,7 +433,7 @@ export default function App() {
         title: "CNAEs Secundários",
         content: (
           <ScrollView style={{ maxHeight: 140 }}>
-            {Array.isArray(cnpjDados.atividades_secundarias) && cnpjDados.atividades_secundarias.length > 0 ? cnpjDados.atividades_secundarias.map((a:any, i:number) => (
+            {Array.isArray(cnpjDados.atividades_secundarias) && cnpjDados.atividades_secundarias.length > 0 ? cnpjDados.atividades_secundarias.map((a,i) => (
               <View key={i} style={{ marginBottom: 7 }}>
                 <Text style={modalStyles.itemLabel}>CNAE Secundário #{i+1}</Text>
                 <Text style={modalStyles.itemValue}>{a.code} - {a.text}</Text>
@@ -435,7 +446,7 @@ export default function App() {
         title: "Sócios / QSA",
         content: (
           <ScrollView style={{ maxHeight: 140 }}>
-            {Array.isArray(cnpjDados.qsa) && cnpjDados.qsa.length > 0 ? cnpjDados.qsa.map((s:any,i:number) => (
+            {Array.isArray(cnpjDados.qsa) && cnpjDados.qsa.length > 0 ? cnpjDados.qsa.map((s,i) => (
               <View key={i} style={{ marginBottom: 10 }}>
                 <Text style={modalStyles.itemLabel}>Nome:</Text>
                 <Text style={modalStyles.itemValue}>{s.nome}</Text>
@@ -468,7 +479,7 @@ export default function App() {
     ];
   }
 
-  // --------- TELAS E MODAIS ---------
+  // Telas e modais
   if (!isLoggedIn) {
     return (
       <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -607,7 +618,6 @@ export default function App() {
           </TouchableOpacity>
         )}
 
-        {/* Botão para enviar dados empresariais à VESPA */}
         {empresa?.dados && isConnected && (
           <TouchableOpacity
             style={{
@@ -627,40 +637,32 @@ export default function App() {
           </TouchableOpacity>
         )}
 
-        {/* Formulário PIX */}
+        {/* Formulário PIX com máscara dinâmica */}
         <View style={{ marginTop: 18, alignSelf: "stretch", padding: 14, backgroundColor: "#f8fafc", borderRadius: 8, borderWidth: 1, borderColor: "#d5e4f7" }}>
-        <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
-        <TextInput
-          style={[styles.inputText, { marginBottom: 8 }]}
-          value={pixAmountText}
-          onChangeText={v => {
-            // Permite somente números e ponto, apenas 1 ponto e 2 casas decimais
-            let valor = v.replace(/,/g, '.').replace(/[^\d.]/g, '');
-            const parts = valor.split('.');
-            let final =
-              parts.length > 1
-                ? parts[0].slice(0, 13) + '.' + parts[1].slice(0, 2)
-                : parts[0].slice(0, 13);
-            setPixAmountText(final);
-          }}
-          placeholder="Valor (R$)"
-          keyboardType="decimal-pad"
-        />
-        <TextInput
-          style={[styles.inputText, { marginBottom: 8 }]}
-          value={pixDesc}
-          onChangeText={setPixDesc}
-          placeholder="Descrição"
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, { alignSelf: "center" }]}
-          onPress={handleCobrarPix}
-          disabled={isLoading || Number(pixAmountText) <= 0}
-        >
-          <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
-        </TouchableOpacity>
-        {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
-      </View>
+          <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
+          <TextInput
+            style={[styles.inputText, { marginBottom: 8 }]}
+            value={pixAmountText}
+            onChangeText={v => setPixAmountText(formatPixValue(v))}
+            onBlur={() => setPixAmountText(formatPixValue(pixAmountText))}
+            placeholder="Valor (R$)"
+            keyboardType="decimal-pad"
+          />
+          <TextInput
+            style={[styles.inputText, { marginBottom: 8 }]}
+            value={pixDesc}
+            onChangeText={setPixDesc}
+            placeholder="Descrição"
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, { alignSelf: "center" }]}
+            onPress={handleCobrarPix}
+            disabled={isLoading || Number(pixAmountText) <= 0}
+          >
+            <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
+          </TouchableOpacity>
+          {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
+        </View>
 
         <TouchableOpacity
           style={{
@@ -741,7 +743,6 @@ export default function App() {
                 />
               }
             >
-              {/* Mostra status do VESPA */}
               {status && (
                 <>
                   <Text style={styles.logText}>
@@ -811,13 +812,10 @@ export default function App() {
             <View>
               <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
 
-              {/* Chave PIX */}
               <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave (CNPJ):</Text>
               <Text style={{ marginBottom: 8 }}>
                 {empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000"}
               </Text>
-
-              {/* Exibe nome fantasia e cidade */}
               <Text style={{ fontWeight: "bold", marginTop: 10 }}>Nome Fantasia:</Text>
               <Text style={{ marginBottom: 8 }}>
                 {empresa?.dados?.fantasia || "-"}
@@ -826,18 +824,12 @@ export default function App() {
               <Text style={{ marginBottom: 8 }}>
                 {empresa?.dados?.municipio || "-"}
               </Text>
-
-              {/* QR Code (BR Code texto) */}
               <Text style={{ fontWeight: "bold" }}>QR Code (copia e cola):</Text>
               <ScrollView style={{ maxHeight: 60, backgroundColor: "#f4f7fb", borderRadius: 8, marginBottom: 8, padding: 6 }}>
                 <Text selectable style={{ fontSize: 12 }}>{pixQr}</Text>
               </ScrollView>
-
-              {/* Status */}
               <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
               <Text>{pixStatus}</Text>
-
-              {/* Ações */}
               <View
                 style={{
                   flexDirection: "row",
@@ -859,7 +851,6 @@ export default function App() {
                 </TouchableOpacity>
               </View>
             </View>
-            {/* Botão FECHAR sempre ao fundo */}
             <TouchableOpacity
               style={[modalStyles.closeModalBtn, { marginTop: 8, alignSelf: 'center' }]}
               onPress={() => setPixQr(null)}
