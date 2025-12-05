@@ -19,25 +19,60 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// ---------- POO Imports ----------
 import { Empresa } from './src/domain/Empresa';
 import { LogEntry } from './src/domain/LogEntry';
 import { StatusESP } from './src/domain/StatusESP';
 import { ConsultaCNPJService } from './src/services/ConsultaCNPJService';
 import { ESP32Service } from './src/services/ESP32Service';
 
-// ENDPOINT DA API PIX
 const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
 
-// Funções para chamar API PIX (agora envia nome_fantasia e cidade)
+function formatPixValue(input: string): string {
+  let val = input.replace(/,/g, '.').replace(/[^\d.]/g, '');
+  const parts = val.split('.');
+  let intPart = parts[0].replace(/^0+/, '');
+  if (intPart === '') intPart = '0';
+  let decPart = parts[1] || '';
+  intPart = intPart.slice(0, 13);
+  decPart = decPart.slice(0, 2);
+  let formatted = intPart;
+  if (val.includes('.') || decPart) {
+    formatted += '.' + decPart;
+  }
+  if ((val.endsWith('.') || decPart.length < 2) && formatted.match(/^\d+\.$/)) {
+    formatted += '00'.slice(0, 2 - decPart.length);
+  }
+  return formatted;
+}
+
+const PIX_AMOUNT_REGEX = /^\d{1,13}(\.\d{1,2})?$/;
+
+type PixAudit = {
+  event: string;
+  timestamp: string;
+  valorPix?: string;
+  descricao?: string;
+  user?: string;
+  pixId?: string;
+  pixStatus?: string;
+  qr?: string;
+  status?: string;
+  motivo?: string;
+  resposta?: any;
+};
+
+// Função genérica para log de auditoria Pix
+async function logPixAudit(event: string, details: Record<string, any> = {}, empresa: Empresa | null = null) {
+  // Para persistência no backend, implemente aqui.
+}
+
 async function criarPix(
   amount: number,
   key: string,
-  description?: string,
-  nome_fantasia?: string,
-  cidade?: string
+  description: string,
+  nome_fantasia: string,
+  cidade: string
 ) {
-  // Certifique-se que o CNPJ vai SEM MÁSCARA para o backend:
   const keySemMascara = key.replace(/\D/g, '');
   const res = await fetch(PIX_API, {
     method: "POST",
@@ -69,36 +104,31 @@ async function confirmarPix(id: string) {
   return res.json();
 }
 
-// Regex para valor Pix e função para fixar decimal no padrão Pix
-const PIX_AMOUNT_REGEX = /^\d{1,13}(\.\d{1,2})?$/;
-
-// ---------- App Component ----------
 export default function App() {
-  // Estados principais
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [cnpj, setCnpj] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [cnpj, setCnpj] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
 
-  const [modalPage, setModalPage] = useState(0);
-  const [modalCnpjVisible, setModalCnpjVisible] = useState(false);
-  const [modalLogVisible, setModalLogVisible] = useState(false);
+  const [modalPage, setModalPage] = useState<number>(0);
+  const [modalCnpjVisible, setModalCnpjVisible] = useState<boolean>(false);
+  const [modalLogVisible, setModalLogVisible] = useState<boolean>(false);
 
   const [log, setLog] = useState<LogEntry[]>([]);
   const [status, setStatus] = useState<StatusESP | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [textToSend, setTextToSend] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [textToSend, setTextToSend] = useState<string>('');
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // Estados PIX
+  // PIX e auditoria
   const [pixQr, setPixQr] = useState<string | null>(null);
   const [pixId, setPixId] = useState<string | null>(null);
   const [pixStatus, setPixStatus] = useState<string | null>(null);
-  // Troque o campo de valor Pix por string para permitir controle e regex!
   const [pixAmountText, setPixAmountText] = useState<string>('');
   const [pixDesc, setPixDesc] = useState<string>("");
+  const [pixAuditLog, setPixAuditLog] = useState<PixAudit[]>([]);
 
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
@@ -106,7 +136,6 @@ export default function App() {
   const cardAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // ----- Splash -----
   useEffect(() => {
     Animated.parallel([
       Animated.timing(logoAnim, { toValue: 1, duration: 950, useNativeDriver: true }),
@@ -114,7 +143,6 @@ export default function App() {
     ]).start();
   }, []);
 
-  // ----- Funções de Login -----
   function handleLogout() {
     Alert.alert("Logout", "Deseja sair do aplicativo?", [
       { text: "Cancelar", style: "cancel" },
@@ -160,8 +188,7 @@ export default function App() {
     }
   }
 
-  // ----- Modal Controle -----
-  function openModalPage(page: number = 0) {
+  function openModalPage(page = 0) {
     setModalPage(page);
     setModalCnpjVisible(true);
   }
@@ -171,14 +198,13 @@ export default function App() {
   function openModalLog() { setModalLogVisible(true); }
   function closeModalLog() { setModalLogVisible(false); }
 
-  // ----- Notificações (Polling) -----
   useEffect(() => {
     async function pollNotifications() {
       if (!isConnected) return;
       const notifs = await ESP32Service.fetchNotifications();
       setLog(prev => {
         const allTimes = new Set(prev.map(l => l.time + l.msg));
-        const news = notifs.filter((n: any) => !allTimes.has(n.time + n.msg));
+        const news = notifs.filter((n: LogEntry) => !allTimes.has(n.time + n.msg));
         if (news.length === 0) return prev;
         return [...prev, ...news];
       });
@@ -193,7 +219,6 @@ export default function App() {
     }
   }, [isConnected]);
 
-  // ----- Funções VESPA -----
   async function handleReload() {
     setRefreshing(true);
     try {
@@ -268,35 +293,43 @@ export default function App() {
     }
   }
 
-  // ---------- PIX: Funções ----------
-  // Função para tratar cobrança Pix, usando regex no valor
+  function addPixAudit(event: string, details: Record<string, any> = {}) {
+    const item: PixAudit = {
+      event,
+      timestamp: new Date().toISOString(),
+      ...details,
+      user: empresa?.dados?.fantasia || empresa?.cnpj || 'anônimo',
+    };
+    setPixAuditLog(prev => [...prev, item]);
+    logPixAudit(event, details, empresa);
+  }
+
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
       setErrorMsg(null);
 
-      // Limpa, converte ',' para '.', só aceita dígitos e ponto
       let valorRaw = pixAmountText.replace(/,/g, '.').replace(/[^\d.]/g, '');
-
-      // Permite apenas um ponto decimal, limita integral/decimal
       const parts = valorRaw.split('.');
       let valConsolidado =
         parts.length > 1
           ? parts[0].slice(0, 13) + '.' + parts[1].slice(0, 2)
           : parts[0].slice(0, 13);
-
-      // Remove zeros à esquerda exceto se antes do ponto
       valConsolidado = valConsolidado.replace(/^0+(?!\.)/, '') || '0';
 
-      // Validação regex e valor mínimo Pix permitido
-      if (!PIX_AMOUNT_REGEX.test(valConsolidado) || Number(valConsolidado) <= 0) {
+      if (!PIX_AMOUNT_REGEX.test(valConsolidado) || Number(valConsolidado) < 0.01) {
         setErrorMsg('Valor inválido! Use até 2 casas decimais, com ponto, mínimo R$0.01');
+        addPixAudit('pix_invalid_value', { valorRaw, valConsolidado });
         setIsLoading(false);
         return;
       }
 
-      // Formata para padrão Pix fixo (duas casas decimais)
       const valorPix = Number(valConsolidado).toFixed(2);
+
+      addPixAudit('pix_request', {
+        valorPix,
+        descricao: pixDesc,
+      });
 
       const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
       const descPix = pixDesc || "Pagamento Spacecworp";
@@ -314,15 +347,24 @@ export default function App() {
           new LogEntry("QR Code PIX inválido ou não retornado!", "error"),
         ]);
         setPixQr(null);
+        addPixAudit('pix_error', { motivo: 'QR inválido', resposta: resp });
         return;
       }
       setPixQr(resp.qr);
       setPixId(resp.id);
       setPixStatus(resp.status);
+
       setLog((prev) => [...prev, new LogEntry("Cobrança PIX criada!", "success")]);
+      addPixAudit('pix_created', {
+        pixId: resp.id,
+        pixStatus: resp.status,
+        qr: resp.qr
+      });
+
     } catch (e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro ao criar PIX: " + e.message, "error")]);
       setPixQr(null);
+      addPixAudit('pix_error', { motivo: e.message });
     } finally {
       setIsLoading(false);
     }
@@ -334,8 +376,13 @@ export default function App() {
       const resp = await statusPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Status PIX: " + resp.status, "info")]);
+      addPixAudit('pix_status_checked', {
+        pixId,
+        status: resp.status
+      });
     } catch(e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro status PIX: " + e.message, "error")]);
+      addPixAudit('pix_error', { motivo: e.message });
     }
   }
 
@@ -345,12 +392,16 @@ export default function App() {
       const resp = await confirmarPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Pagamento PIX confirmado!", "success")]);
+      addPixAudit('pix_confirmed', {
+        pixId,
+        status: resp.status
+      });
     } catch(e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro ao confirmar PIX: " + e.message, "error")]);
+      addPixAudit('pix_error', { motivo: e.message });
     }
   }
 
-  // ----- Páginas do Modal -----
   const MODAL_PAGES = [
     "empresa",
     "enderecos",
@@ -422,7 +473,7 @@ export default function App() {
         title: "CNAEs Secundários",
         content: (
           <ScrollView style={{ maxHeight: 140 }}>
-            {Array.isArray(cnpjDados.atividades_secundarias) && cnpjDados.atividades_secundarias.length > 0 ? cnpjDados.atividades_secundarias.map((a:any, i:number) => (
+            {Array.isArray(cnpjDados.atividades_secundarias) && cnpjDados.atividades_secundarias.length > 0 ? cnpjDados.atividades_secundarias.map((a: any,i: number) => (
               <View key={i} style={{ marginBottom: 7 }}>
                 <Text style={modalStyles.itemLabel}>CNAE Secundário #{i+1}</Text>
                 <Text style={modalStyles.itemValue}>{a.code} - {a.text}</Text>
@@ -435,7 +486,7 @@ export default function App() {
         title: "Sócios / QSA",
         content: (
           <ScrollView style={{ maxHeight: 140 }}>
-            {Array.isArray(cnpjDados.qsa) && cnpjDados.qsa.length > 0 ? cnpjDados.qsa.map((s:any,i:number) => (
+            {Array.isArray(cnpjDados.qsa) && cnpjDados.qsa.length > 0 ? cnpjDados.qsa.map((s:any, i:number) => (
               <View key={i} style={{ marginBottom: 10 }}>
                 <Text style={modalStyles.itemLabel}>Nome:</Text>
                 <Text style={modalStyles.itemValue}>{s.nome}</Text>
@@ -468,7 +519,7 @@ export default function App() {
     ];
   }
 
-  // --------- TELAS E MODAIS ---------
+  // Telas e modais
   if (!isLoggedIn) {
     return (
       <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -607,7 +658,6 @@ export default function App() {
           </TouchableOpacity>
         )}
 
-        {/* Botão para enviar dados empresariais à VESPA */}
         {empresa?.dados && isConnected && (
           <TouchableOpacity
             style={{
@@ -627,44 +677,57 @@ export default function App() {
           </TouchableOpacity>
         )}
 
-        {/* Formulário PIX */}
         <View style={{ marginTop: 18, alignSelf: "stretch", padding: 14, backgroundColor: "#f8fafc", borderRadius: 8, borderWidth: 1, borderColor: "#d5e4f7" }}>
-        <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
-        <TextInput
-          style={[styles.inputText, { marginBottom: 8 }]}
-          value={pixAmountText}
-          onChangeText={v => {
-            // Permite somente números e ponto, apenas 1 ponto e 2 casas decimais
-            let valor = v.replace(/,/g, '.').replace(/[^\d.]/g, '');
-            const parts = valor.split('.');
-            let final =
-              parts.length > 1
-                ? parts[0].slice(0, 13) + '.' + parts[1].slice(0, 2)
-                : parts[0].slice(0, 13);
-            setPixAmountText(final);
-          }}
-          placeholder="Valor (R$)"
-          keyboardType="decimal-pad"
-        />
-        <TextInput
-          style={[styles.inputText, { marginBottom: 8 }]}
-          value={pixDesc}
-          onChangeText={setPixDesc}
-          placeholder="Descrição"
-        />
-        <TouchableOpacity
-          style={[styles.sendButton, { alignSelf: "center" }]}
-          onPress={handleCobrarPix}
-          disabled={isLoading || Number(pixAmountText) <= 0}
-        >
-          <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
-        </TouchableOpacity>
-        {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
-      </View>
+          <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
+          <TextInput
+            style={[styles.inputText, { marginBottom: 8 }]}
+            value={pixAmountText}
+            onChangeText={v => setPixAmountText(formatPixValue(v))}
+            onBlur={() => setPixAmountText(formatPixValue(pixAmountText))}
+            placeholder="Valor (R$)"
+            keyboardType="decimal-pad"
+          />
+          <Text style={{ color: "#4068de", fontSize: 14, fontWeight: "bold", marginBottom: 4 }}>
+            Valor final: {pixAmountText && !isNaN(Number(pixAmountText)) ? Number(pixAmountText).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : ''}
+          </Text>
+          <TextInput
+            style={[styles.inputText, { marginBottom: 8 }]}
+            value={pixDesc}
+            onChangeText={setPixDesc}
+            placeholder="Descrição"
+          />
+          <TouchableOpacity
+            style={[styles.sendButton, { alignSelf: "center" }]}
+            onPress={handleCobrarPix}
+            disabled={isLoading || Number(pixAmountText) < 0.01}
+          >
+            <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
+          </TouchableOpacity>
+          {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
+        </View>
+
+        <View style={{ alignSelf: "stretch", marginTop: 20, padding: 7, backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10 }}>
+          <Text style={{ fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16 }}>
+            Auditoria PIX (ações recentes)
+          </Text>
+          <ScrollView style={{ maxHeight: 100 }}>
+            {pixAuditLog.length === 0 &&
+              <Text style={{ color: "#b99847" }}>Nenhuma atividade Pix registrada nesta sessão.</Text>}
+            {pixAuditLog.length > 0 && pixAuditLog.slice(-5).reverse().map((entry, idx) => (
+              <Text key={idx} style={{ color: "#654413" }}>
+                [{new Date(entry.timestamp).toLocaleString('pt-BR')}] {entry.event} 
+                {entry.valorPix ? ` - Valor: ${Number(entry.valorPix).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}
+                {entry.pixId ? ` - pixId: ${entry.pixId}` : ''}
+                {entry.status ? ` - Status: ${entry.status}` : ''}
+                {entry.motivo ? ` - Motivo: ${entry.motivo}` : ''}
+              </Text>
+            ))}
+          </ScrollView>
+        </View>
 
         <TouchableOpacity
           style={{
-            marginTop: 16,
+            marginTop: 8,
             backgroundColor: '#E53E3E',
             paddingHorizontal: 30,
             paddingVertical: 10,
@@ -678,7 +741,6 @@ export default function App() {
         <StatusBar style="auto" />
       </ScrollView>
 
-      {/* Modal paginado com dados do CNPJ */}
       {empresa?.dados && (
       <Modal
         visible={modalCnpjVisible}
@@ -721,7 +783,6 @@ export default function App() {
       </Modal>
       )}
 
-      {/* Modal de LOG - só dados do VESPA */}
       <Modal
         visible={modalLogVisible}
         animationType="fade"
@@ -741,7 +802,6 @@ export default function App() {
                 />
               }
             >
-              {/* Mostra status do VESPA */}
               {status && (
                 <>
                   <Text style={styles.logText}>
@@ -790,7 +850,6 @@ export default function App() {
         </View>
       </Modal>
 
-      {/* Modal PIX */}
       <Modal
         visible={!!pixQr}
         animationType="slide"
@@ -810,14 +869,14 @@ export default function App() {
           >
             <View>
               <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
-
-              {/* Chave PIX */}
+              <Text style={{ fontWeight: "bold", marginTop: 10 }}>Valor:</Text>
+              <Text style={{ marginBottom: 8 }}>
+                {Number(pixAmountText).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </Text>
               <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave (CNPJ):</Text>
               <Text style={{ marginBottom: 8 }}>
                 {empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000"}
               </Text>
-
-              {/* Exibe nome fantasia e cidade */}
               <Text style={{ fontWeight: "bold", marginTop: 10 }}>Nome Fantasia:</Text>
               <Text style={{ marginBottom: 8 }}>
                 {empresa?.dados?.fantasia || "-"}
@@ -826,18 +885,12 @@ export default function App() {
               <Text style={{ marginBottom: 8 }}>
                 {empresa?.dados?.municipio || "-"}
               </Text>
-
-              {/* QR Code (BR Code texto) */}
               <Text style={{ fontWeight: "bold" }}>QR Code (copia e cola):</Text>
               <ScrollView style={{ maxHeight: 60, backgroundColor: "#f4f7fb", borderRadius: 8, marginBottom: 8, padding: 6 }}>
                 <Text selectable style={{ fontSize: 12 }}>{pixQr}</Text>
               </ScrollView>
-
-              {/* Status */}
               <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
               <Text>{pixStatus}</Text>
-
-              {/* Ações */}
               <View
                 style={{
                   flexDirection: "row",
@@ -859,7 +912,6 @@ export default function App() {
                 </TouchableOpacity>
               </View>
             </View>
-            {/* Botão FECHAR sempre ao fundo */}
             <TouchableOpacity
               style={[modalStyles.closeModalBtn, { marginTop: 8, alignSelf: 'center' }]}
               onPress={() => setPixQr(null)}
@@ -873,8 +925,7 @@ export default function App() {
   );
 }
 
-// Objetos de estilos...
-
+// Estilos originais
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
   loginCard: {
