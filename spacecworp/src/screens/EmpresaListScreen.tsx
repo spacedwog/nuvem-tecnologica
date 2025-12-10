@@ -27,7 +27,7 @@ type EmpresaList = {
 type EmailFilter = "all" | "with" | "without";
 
 // Token pessoal do GitHub -- troque por seu próprio token
-const token = "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";
+const token = "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";
 
 export default function EmpresaListsScreen() {
   const [orgs, setOrgs] = useState<EmpresaList[]>([]);
