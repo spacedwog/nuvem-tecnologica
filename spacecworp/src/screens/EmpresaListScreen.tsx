@@ -24,6 +24,9 @@ type EmpresaList = {
   email?: string;
 };
 
+// Opções de filtro
+type EmailFilter = "all" | "with" | "without";
+
 export default function EmpresaListsScreen() {
   const [orgs, setOrgs] = useState<EmpresaList[]>([]);
   const [loading, setLoading] = useState(false);
@@ -33,6 +36,8 @@ export default function EmpresaListsScreen() {
   const [selectedOrg, setSelectedOrg] = useState<EmpresaList | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
 
   const fetchOrgs = async (query: string) => {
     setLoading(true);
@@ -119,6 +124,14 @@ export default function EmpresaListsScreen() {
             }
           : prev
       );
+      // Preenche e-mail também na listagem se desejar (opcional)
+      setOrgs(prev =>
+        prev.map(org =>
+          org.login === login
+            ? { ...org, email: orgDetail.email || undefined }
+            : org
+        )
+      );
     } catch {}
     setDetailLoading(false);
   };
@@ -133,7 +146,7 @@ export default function EmpresaListsScreen() {
     if (!org.email) return;
     const subject = encodeURIComponent(`Proposta de Software para ${org.login}`);
     const body = encodeURIComponent(
-      `Olá equipe ${org.login},\n\nGostaria de apresentar uma proposta de software que pode ajudar a sua organização. Podemos conversar?\n\nAtenciosamente,\n[Seu nome ou empresa]`
+      `Olá equipe ${org.login},\n\nGostaria de apresentar uma proposta de software que pode ajudar a sua organização. Podemos conversar?\n\nAtenciosamente,\n[Spacecworp Team]`
     );
     const mailto = `mailto:${org.email}?subject=${subject}&body=${body}`;
     if (Platform.OS === 'web') {
@@ -142,6 +155,38 @@ export default function EmpresaListsScreen() {
       Linking.openURL(mailto);
     }
   };
+
+  // Filtro das empresas de acordo com o radio selecionado
+  const orgsFiltered = orgs.filter(org => {
+    if (emailFilter === "all") return true;
+    if (emailFilter === "with") return !!org.email;
+    if (emailFilter === "without") return !org.email;
+    return true;
+  });
+
+  // Componente simples de radio button
+  const RadioButton = ({
+    value,
+    label,
+    selected,
+    onPress,
+  }: {
+    value: EmailFilter;
+    label: string;
+    selected: boolean;
+    onPress: (value: EmailFilter) => void;
+  }) => (
+    <TouchableOpacity
+      style={styles.radioContainer}
+      onPress={() => onPress(value)}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.radioOuter, selected && styles.radioOuterSelected]}>
+        {selected && <View style={styles.radioInner} />}
+      </View>
+      <Text style={styles.radioLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.container}>
@@ -163,15 +208,38 @@ export default function EmpresaListsScreen() {
           <Ionicons name="search" size={19} color="#fff" />
         </Pressable>
       </View>
+
+      {/* Radio Buttons */}
+      <View style={styles.radioGroup}>
+        <RadioButton
+          value="all"
+          label="Todas"
+          selected={emailFilter === "all"}
+          onPress={setEmailFilter}
+        />
+        <RadioButton
+          value="with"
+          label="Somente com e-mail"
+          selected={emailFilter === "with"}
+          onPress={setEmailFilter}
+        />
+        <RadioButton
+          value="without"
+          label="Somente sem e-mail"
+          selected={emailFilter === "without"}
+          onPress={setEmailFilter}
+        />
+      </View>
+
       {error && <Text style={styles.error}>{error}</Text>}
       {loading ? (
         <ActivityIndicator size="large" color="#3182ce" style={{ marginTop: 24 }} />
       ) : (
         <ScrollView style={{ width: '100%' }} keyboardShouldPersistTaps="handled">
-          {orgs.length === 0 ? (
+          {orgsFiltered.length === 0 ? (
             <Text style={styles.empty}>Nenhuma organização encontrada.</Text>
           ) : (
-            orgs.map((org) => (
+            orgsFiltered.map((org) => (
               <TouchableOpacity key={org.id} style={styles.card} onPress={() => openModal(org)}>
                 <View style={styles.orgHeader}>
                   <View style={styles.avatarWrap}>
@@ -187,6 +255,14 @@ export default function EmpresaListsScreen() {
                     <Text style={styles.name}>{org.login}</Text>
                     <Text style={styles.id}>ID: {org.id}</Text>
                     <Text style={styles.link}>{org.html_url}</Text>
+                    <Text
+                      style={[
+                        styles.emailInfo,
+                        !org.email && { color: '#aaa', fontStyle: 'italic' },
+                      ]}
+                    >
+                      {org.email ? org.email : 'E-mail não informado'}
+                    </Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -301,6 +377,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  radioGroup: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 9,
+    marginTop: -2,
+  },
+  radioContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 8,
+    paddingVertical: 2,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#3182ce',
+    marginRight: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  radioOuterSelected: {
+    borderColor: '#226c99',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3182ce',
+  },
+  radioLabel: {
+    fontSize: 14,
+    color: '#23497a',
+    marginRight: 3,
+  },
   error: {
     width: '100%',
     color: '#c42c00',
@@ -350,6 +464,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#444',
     fontStyle: 'italic',
+  },
+  emailInfo: {
+    fontSize: 14,
+    color: '#44a',
+    marginTop: 3,
   },
   empty: {
     textAlign: 'center',
