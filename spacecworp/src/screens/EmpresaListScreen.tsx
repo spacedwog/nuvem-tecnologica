@@ -1,98 +1,272 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
+  TouchableOpacity,
+  Modal,
+  Pressable,
+  Image,
+  TextInput,
+  Platform,
+  Linking,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// Tipos de empresa
-type EmpresaCadastrada = {
-  nome: string;
-  fantasia?: string;
-  email: string;
-  cnpj: string;
+type GithubOrganization = {
+  login: string;
+  id: number;
+  avatar_url: string;
+  description?: string;
+  html_url: string;
+  email?: string;
 };
 
-export default function EmpresaListScreen() {
-  const [empresas, setEmpresas] = useState<EmpresaCadastrada[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function GithubOrganizationsScreen() {
+  const [orgs, setOrgs] = useState<GithubOrganization[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+
+  const [selectedOrg, setSelectedOrg] = useState<GithubOrganization | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const fetchOrgs = async (query: string) => {
+    setLoading(true);
+    setError(null);
+
+    const endpoint = query
+      ? `https://api.github.com/search/users?q=type:org+${encodeURIComponent(query)}`
+      : 'https://api.github.com/organizations';
+
+    try {
+      const res = await fetch(endpoint);
+      let data: any = [];
+
+      if ((res.headers.get('content-type') || '').includes('application/json')) {
+        data = await res.json();
+      } else {
+        try {
+          data = JSON.parse(await res.text());
+        } catch {
+          data = [];
+        }
+      }
+
+      if (endpoint.includes('/search/')) {
+        if (Array.isArray(data.items)) {
+          setOrgs(
+            data.items.map((org: any) => ({
+              login: org.login,
+              id: org.id,
+              avatar_url: org.avatar_url,
+              html_url: org.html_url || `https://github.com/${org.login}`,
+              description: '', // preenchido depois no fetchOrgDetails
+              email: undefined,
+            }))
+          );
+        } else {
+          setOrgs([]);
+        }
+      } else {
+        if (Array.isArray(data)) {
+          setOrgs(
+            data.map((org: any) => ({
+              login: org.login,
+              id: org.id,
+              avatar_url: org.avatar_url,
+              html_url: org.html_url || org.url || `https://github.com/${org.login}`,
+              description: '',
+              email: undefined,
+            }))
+          );
+        } else {
+          setOrgs([]);
+        }
+      }
+    } catch (err) {
+      setError('Erro ao buscar organizações.');
+      setOrgs([]);
+    }
+    setLoading(false);
+  };
 
   useEffect(() => {
-    async function fetchEmpresas() {
-      setLoading(true);
-      try {
-        const res = await fetch('https://nuvem-tecnologica.vercel.app/api/empresas');
-        const contentType = res.headers.get("content-type");
-        let data: any = [];
-
-        if (contentType && contentType.includes("application/json")) {
-          // Resposta é JSON
-          data = await res.json();
-        } else {
-          // Resposta não é JSON, vamos imprimir para diagnosticar
-          const respostaBruta = await res.text();
-          console.error("Resposta não-JSON da API:", respostaBruta);
-
-          // Tenta converter para JSON se for estrutura mesmo assim
-          try {
-            data = JSON.parse(respostaBruta);
-          } catch (jsonErr) {
-            console.error("Não foi possível converter para JSON.", jsonErr);
-            data = [];
-          }
-        }
-
-        // Trata diferentes estruturas de resposta
-        if (Array.isArray(data)) {
-          setEmpresas(data);
-        } else if (data && Array.isArray(data.empresas)) {
-          setEmpresas(data.empresas);
-        } else {
-          setEmpresas([]);
-        }
-      } catch (err) {
-        setEmpresas([]);
-        console.error('Erro buscando empresas:', err);
-      }
-      setLoading(false);
-    }
-    fetchEmpresas();
+    fetchOrgs('');
   }, []);
+
+  // Busca detalhes ao abrir modal
+  const openModal = (org: GithubOrganization) => {
+    setSelectedOrg(org);
+    setModalVisible(true);
+    fetchOrgDetails(org.login);
+  };
+
+  const fetchOrgDetails = async (login: string) => {
+    setDetailLoading(true);
+    try {
+      const res = await fetch(`https://api.github.com/orgs/${login}`);
+      const orgDetail = await res.json();
+      setSelectedOrg(prev =>
+        prev
+          ? {
+              ...prev,
+              description: orgDetail.description || '',
+              email: orgDetail.email || undefined,
+            }
+          : prev
+      );
+    } catch {}
+    setDetailLoading(false);
+  };
+
+  const closeModal = () => {
+    setSelectedOrg(null);
+    setModalVisible(false);
+  };
+
+  // Envio de e-mail (call to your own API, do not call smtp/github directly)
+  const sendSaleEmail = async (org: GithubOrganization) => {
+    if (!org.email) return;
+    try {
+      const res = await fetch('/api/send-sale-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: org.email,
+          orgName: org.login,
+        }),
+      });
+      if (res.ok) {
+        alert('Proposta de venda enviada com sucesso!');
+      } else {
+        alert('Falha ao enviar e-mail.');
+      }
+    } catch (e) {
+      alert('Erro ao enviar e-mail.');
+    }
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>
-        <Ionicons name="business-outline" size={26} color="#3182ce" /> Empresas cadastradas
+        <Ionicons name="business-outline" size={26} color="#3182ce" /> Organizações do GitHub
       </Text>
-      <Text style={styles.subtitle}>E-mails para contato e vendas</Text>
+      <Text style={styles.subtitle}>Pesquise organizações e proponha venda de software</Text>
+      <View style={styles.searchArea}>
+        <TextInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Buscar organização por nome"
+          style={styles.searchInput}
+          onSubmitEditing={() => fetchOrgs(search.trim())}
+          autoCorrect={false}
+          autoCapitalize="none"
+        />
+        <Pressable onPress={() => fetchOrgs(search.trim())} style={styles.searchButton}>
+          <Ionicons name="search" size={19} color="#fff" />
+        </Pressable>
+      </View>
+      {error && <Text style={styles.error}>{error}</Text>}
       {loading ? (
-        <ActivityIndicator size="large" color="#3182ce" style={{ marginTop: 26 }} />
+        <ActivityIndicator size="large" color="#3182ce" style={{ marginTop: 24 }} />
       ) : (
-        <ScrollView style={{ width: '100%' }}>
-          {empresas.length === 0 && (
-            <Text style={styles.empty}>Nenhuma empresa cadastrada.</Text>
+        <ScrollView style={{ width: '100%' }} keyboardShouldPersistTaps="handled">
+          {orgs.length === 0 ? (
+            <Text style={styles.empty}>Nenhuma organização encontrada.</Text>
+          ) : (
+            orgs.map((org) => (
+              <TouchableOpacity key={org.id} style={styles.card} onPress={() => openModal(org)}>
+                <View style={styles.orgHeader}>
+                  <View style={styles.avatarWrap}>
+                    <Ionicons
+                      name="logo-github"
+                      size={34}
+                      color="#333"
+                      style={{ position: 'absolute', left: 7, top: 7, opacity: 0.17 }}
+                    />
+                    <Image source={{ uri: org.avatar_url }} style={styles.avatar} />
+                  </View>
+                  <View>
+                    <Text style={styles.name}>{org.login}</Text>
+                    <Text style={styles.id}>ID: {org.id}</Text>
+                    <Text style={styles.link}>{org.html_url}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
           )}
-          {empresas.map((empresa, idx) => (
-            <View key={empresa.cnpj || idx} style={styles.card}>
-              <Text style={styles.name}>
-                {empresa.nome}{" "}
-                {empresa.fantasia ? (
-                  <Text style={styles.fantasia}>({empresa.fantasia})</Text>
-                ) : null}
-              </Text>
-              <Text style={styles.cnpj}>
-                <Text style={styles.label}>CNPJ: </Text> {empresa.cnpj}
-              </Text>
-              <Text style={styles.email}>
-                <Text style={styles.label}>E-mail: </Text>
-                <Text selectable>{empresa.email}</Text>
-              </Text>
-            </View>
-          ))}
         </ScrollView>
       )}
+
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={modalVisible}
+        onRequestClose={closeModal}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalContent}>
+            {selectedOrg ? (
+              <>
+                <View style={{ alignItems: 'center' }}>
+                  <Image source={{ uri: selectedOrg.avatar_url }} style={styles.modalAvatar} />
+                </View>
+                <Text style={styles.modalName}>{selectedOrg.login}</Text>
+                <Text style={styles.modalId}>ID: {selectedOrg.id}</Text>
+                {detailLoading ? (
+                  <ActivityIndicator size="small" color="#3182ce" style={{ marginVertical: 10 }} />
+                ) : (
+                  <>
+                    <Text style={styles.modalDesc}>
+                      {selectedOrg.description || <Text style={{ fontStyle: 'italic', color: '#999' }}>Sem descrição</Text>}
+                    </Text>
+                    <Pressable
+                      onPress={() => {
+                        if (Platform.OS === 'web') {
+                          window.open(selectedOrg.html_url, '_blank');
+                        } else {
+                          Linking.openURL(selectedOrg.html_url);
+                        }
+                      }}
+                      style={styles.modalLinkBtn}
+                    >
+                      <Text style={styles.modalLink}>{selectedOrg.html_url}</Text>
+                    </Pressable>
+                    <Text style={styles.modalEmailTitle}>E-mail</Text>
+                    <Text
+                      selectable
+                      style={[styles.modalEmail, !selectedOrg.email && { color: '#aaa', fontStyle: 'italic' }]}
+                    >
+                      {selectedOrg.email ? selectedOrg.email : 'E-mail não informado'}
+                    </Text>
+                    {selectedOrg.email ? (
+                      <Pressable
+                        onPress={() => sendSaleEmail(selectedOrg)}
+                        style={styles.saleBtn}
+                      >
+                        <Text style={styles.saleBtnText}>Enviar proposta de venda</Text>
+                      </Pressable>
+                    ) : null}
+                  </>
+                )}
+                <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
+                  <Text style={{ color: '#fff', fontWeight: 'bold' }}>Fechar</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // ... (mantenha os estilos anteriores)
   container: {
     flex: 1,
     backgroundColor: '#f8fafd',
@@ -104,10 +278,45 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
     color: '#3182ce',
-    marginBottom: 7,
+    marginBottom: 6,
     textAlign: 'center',
   },
-  subtitle: { fontSize: 16, color: '#555', marginBottom: 18 },
+  subtitle: { fontSize: 15, color: '#666', marginBottom: 15 },
+  searchArea: {
+    flexDirection: 'row',
+    width: '100%',
+    marginBottom: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1.2,
+    borderColor: '#e1eaf6',
+    borderRadius: 10,
+    paddingHorizontal: 15,
+    height: 40,
+    fontSize: 16,
+  },
+  searchButton: {
+    backgroundColor: '#3182ce',
+    borderRadius: 9,
+    marginLeft: 10,
+    padding: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  error: {
+    width: '100%',
+    color: '#c42c00',
+    backgroundColor: '#fff1e9',
+    borderRadius: 8,
+    padding: 7,
+    marginBottom: 5,
+    textAlign: 'center',
+    fontSize: 15,
+  },
   card: {
     backgroundColor: '#fff',
     borderRadius: 11,
@@ -117,11 +326,37 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2eaf7',
   },
+  orgHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  avatarWrap: {
+    width: 48,
+    height: 48,
+    marginRight: 13,
+    overflow: 'hidden',
+    borderRadius: 24,
+    backgroundColor: '#ededed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#fff',
+  },
   name: { fontSize: 17, fontWeight: 'bold', color: '#23497a' },
-  fantasia: { fontSize: 16, color: '#226c99', fontWeight: 'bold' },
-  cnpj: { fontSize: 14, color: 'gray', marginBottom: 4 },
-  email: { fontSize: 15, color: '#312', fontWeight: 'bold' },
-  label: { color: '#3182ce', fontWeight: 'bold' },
+  id: { fontSize: 14, color: 'gray' },
+  link: { fontSize: 14, color: '#1b60d0', textDecorationLine: 'underline' },
+  desc: {
+    marginTop: 4,
+    fontSize: 15,
+    color: '#444',
+    fontStyle: 'italic',
+  },
   empty: {
     textAlign: 'center',
     fontStyle: 'italic',
@@ -129,4 +364,52 @@ const styles = StyleSheet.create({
     marginVertical: 40,
     fontSize: 17,
   },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(25,30,52,0.36)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 22,
+    alignItems: 'center',
+    minWidth: 270,
+    shadowColor: '#222',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 18,
+    elevation: 7,
+  },
+  modalAvatar: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    marginBottom: 12,
+    backgroundColor: '#f2f2f2',
+  },
+  modalName: { fontSize: 22, fontWeight: 'bold', color: '#23497a', textAlign: 'center', marginVertical: 6 },
+  modalId: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 9 },
+  modalDesc: { fontSize: 16, color: '#444', fontStyle: 'italic', textAlign: 'center', marginBottom: 5 },
+  modalEmailTitle: { fontSize: 14, color: '#3182ce', fontWeight: 'bold', marginTop: 17 },
+  modalEmail: { fontSize: 16, color: '#333', textAlign: 'center', marginTop: 1, marginBottom: 10 },
+  modalLink: { color: '#226c99', fontWeight: '500', textAlign: 'center', fontSize: 16, textDecorationLine: 'underline' },
+  modalLinkBtn: { marginBottom: 11 },
+  modalCloseBtn: {
+    backgroundColor: '#3182ce',
+    paddingHorizontal: 22,
+    paddingVertical: 9,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  saleBtn: {
+    backgroundColor: '#40c970',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 9,
+    marginTop: 9,
+    marginBottom: 2,
+  },
+  saleBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });
