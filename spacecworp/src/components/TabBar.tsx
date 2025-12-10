@@ -37,7 +37,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#e6f0fc',
     borderTopWidth: 1,
     borderColor: '#b5ccf1',
-    paddingVertical: 8
+    paddingVertical: 8,
+    bottom: 25,
   },
   tab: {
     flexGrow: 1,
