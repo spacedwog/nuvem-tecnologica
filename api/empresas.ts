@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 // Inicialize o Firebase Admin apenas uma vez
 const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? '{spacecworp-cac97}'
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? '{}'
 );
 
 if (!getApps().length) {
@@ -28,7 +28,13 @@ export default async function handler(
     const snapshot = await db.collection('empresas').get();
     const empresas = snapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data(),
+      ...(doc.data() as {
+        nome?: string;
+        fantasia?: string;
+        cnpj?: string;
+        email?: string;
+        [key: string]: any;
+      }),
     }));
 
     // Filtra apenas os campos principais se quiser
