@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import MainScreen from './src/MainScreen'; // conteúdo atual do App.tsx exportado
 import ConsultaCNPJScreen from './src/screens/ConsultaCNPJScreen'; // tela de empresas
-import NotaFiscalScreen from './src/screens/ECommerceScreen'; // tela de ecommerce
+import ECommerceScreen from './src/screens/ECommerceScreen'; // tela de ecommerce
 import TabBar from './src/components/TabBar'; // barra de navegação
 
 export default function App() {

@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   FlatList,
@@ -10,32 +9,8 @@ import {
   Alert,
   Modal,
   Pressable,
+  TextInput
 } from "react-native";
-
-// Exemplo de produtos
-const products = [
-  {
-    id: "1",
-    nome: "Smartphone Android",
-    descricao: "Celular Android, 128GB, 4GB RAM",
-    preco: 1459.99,
-    imagem: "https://cdn-icons-png.flaticon.com/512/1010/1010966.png",
-  },
-  {
-    id: "2",
-    nome: "Fone Bluetooth",
-    descricao: "Áudio estéreo sem fio, bateria 12h",
-    preco: 239.9,
-    imagem: "https://cdn-icons-png.flaticon.com/512/686/686589.png",
-  },
-  {
-    id: "3",
-    nome: "Notebook Ultrafino",
-    descricao: "Tela 14'', SSD 256GB, 8GB RAM",
-    preco: 3599.0,
-    imagem: "https://cdn-icons-png.flaticon.com/512/2922/2922193.png",
-  },
-];
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -45,10 +20,22 @@ function formatBRL(value: number) {
   });
 }
 
-export default function ECommerceScreen() {
+function ECommerceScreen() {
+  const [products, setProducts] = useState<any[]>([]);
   const [cart, setCart] = useState<{id: string; qtd: number}[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+
+  // Modal cadastro
+  const [registerModalVisible, setRegisterModalVisible] = useState(false);
+  const [formNome, setFormNome] = useState("");
+  const [formDesc, setFormDesc] = useState("");
+  const [formPreco, setFormPreco] = useState("");
+  const [formImagem, setFormImagem] = useState("");
+
+  // Modal exclusão
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<any | null>(null);
 
   function addToCart(productId: string) {
     setCart((prev) => {
@@ -79,12 +66,6 @@ export default function ECommerceScreen() {
     clearCart();
   }
 
-  const cartItems = cart.map(({id, qtd}) => {
-    const product = products.find((p) => p.id === id);
-    return { ...product, qtd };
-  });
-  const total = cartItems.reduce((sum, item) => sum + (item?.preco || 0) * (item.qtd || 0), 0);
-
   function openModal(product: any) {
     setSelectedProduct(product);
     setModalVisible(true);
@@ -95,43 +76,76 @@ export default function ECommerceScreen() {
     setSelectedProduct(null);
   }
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>E-Commerce</Text>
-      <Text style={styles.subtitle}>Produtos</Text>
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id}
-        renderItem={({item}) => (
-          <TouchableOpacity
-            onPress={() => openModal(item)}
-            activeOpacity={0.87}
-          >
-            <View style={styles.productCard}>
-              {item.imagem && (
-                <Image
-                  source={{ uri: item.imagem }}
-                  style={styles.productImage}
-                />
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.productName}>{item.nome}</Text>
-                <Text style={styles.productDesc}>{item.descricao}</Text>
-                <Text style={styles.productPrice}>{formatBRL(item.preco)}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => addToCart(item.id)}
-              >
-                <Text style={styles.buttonText}>Adicionar</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        )}
-        style={{ width: "100%" }}
-        showsVerticalScrollIndicator={false}
-      />
+  function openRegisterModal() {
+    setRegisterModalVisible(true);
+  }
 
+  function closeRegisterModal() {
+    setRegisterModalVisible(false);
+    setFormNome(""); setFormDesc(""); setFormPreco(""); setFormImagem("");
+  }
+
+  function handleAddProduct() {
+    if (!formNome.trim() || !formPreco.trim()) {
+      Alert.alert("Campos obrigatórios", "Preencha nome e preço do produto.");
+      return;
+    }
+    const nextId = String(Number(products[products.length-1]?.id || 0) + 1);
+    setProducts(prev => [
+      ...prev,
+      {
+        id: nextId,
+        nome: formNome,
+        descricao: formDesc,
+        preco: Number(formPreco),
+        imagem: formImagem || undefined,
+      }
+    ]);
+    closeRegisterModal();
+  }
+
+  // Modal exclusão
+  function openDeleteModal(product: any) {
+    setProductToDelete(product);
+    setDeleteModalVisible(true);
+  }
+
+  function closeDeleteModal() {
+    setDeleteModalVisible(false);
+    setProductToDelete(null);
+  }
+
+  function handleDeleteProduct() {
+    if (productToDelete) {
+      setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
+      setCart(prev => prev.filter(c => c.id !== productToDelete.id));
+    }
+    closeDeleteModal();
+    if(selectedProduct?.id === productToDelete?.id) closeModal();
+  }
+
+  const cartItems = cart.map(({id, qtd}) => {
+    const product = products.find((p) => p.id === id);
+    return { ...product, qtd };
+  });
+  const total = cartItems.reduce((sum, item) => sum + (item?.preco || 0) * (item.qtd || 0), 0);
+
+  // <<<<< MAIN HEADER CENTRALIZED >>>>>
+  const ListHeader = () => (
+    <View style={styles.headerWrapper}>
+      <Text style={styles.title}>E-Commerce</Text>
+      <TouchableOpacity
+        style={styles.cadastroButton}
+        onPress={openRegisterModal}
+      >
+        <Text style={styles.cadastroButtonText}>Cadastrar Produto</Text>
+      </TouchableOpacity>
+      <Text style={styles.subtitle}>Produtos</Text>
+    </View>
+  );
+
+  const ListFooter = () => (
+    <View style={styles.footerContainer}>
       <Text style={styles.subtitle}>Carrinho</Text>
       {cartItems.length === 0 ? (
         <Text style={styles.emptyCart}>Seu carrinho está vazio.</Text>
@@ -143,11 +157,11 @@ export default function ECommerceScreen() {
               style={styles.cartItem}
             >
               <Text style={styles.cartItemText}>
-                {item.nome} x {item.qtd} = {formatBRL(item.preco * item.qtd)}
+                {item.nome} x {item.qtd} = {formatBRL((item.preco ?? 0) * item.qtd)}
               </Text>
               <TouchableOpacity
                 style={styles.removeButton}
-                onPress={() => removeFromCart(item.id)}
+                onPress={() => item.id && removeFromCart(item.id)}
               >
                 <Text style={{ color: "#fff" }}>Remover</Text>
               </TouchableOpacity>
@@ -168,8 +182,60 @@ export default function ECommerceScreen() {
           </TouchableOpacity>
         </View>
       )}
+    </View>
+  );
 
-      {/* ----------- Modal de produto ------------ */}
+  return (
+    <View style={styles.container}>
+      <FlatList
+        data={products}
+        keyExtractor={(item) => item.id}
+        ListHeaderComponent={ListHeader}
+        ListFooterComponent={ListFooter}
+        renderItem={({item}) => (
+          <View style={{alignItems: "center"}}>
+            <TouchableOpacity
+              onPress={() => openModal(item)}
+              activeOpacity={0.87}
+            >
+              <View style={styles.productCard}>
+                {item.imagem ? (
+                  <Image
+                    source={{ uri: item.imagem }}
+                    style={styles.productImage}
+                  />
+                ) : null}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.productName}>{item.nome}</Text>
+                  <Text style={styles.productDesc}>{item.descricao}</Text>
+                  <Text style={styles.productPrice}>{formatBRL(item.preco)}</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => openDeleteModal(item)}
+                >
+                  <Text style={{color:"#fff",fontWeight:"bold"}}>Excluir</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() => addToCart(item.id)}
+                >
+                  <Text style={styles.buttonText}>Adicionar</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 70, alignItems: "center" }}
+        ListEmptyComponent={
+          <Text style={{textAlign:"center", color:"#aaa", marginTop:14}}>
+            Nenhum produto cadastrado.
+          </Text>
+        }
+      />
+
+      {/* Modal de Detalhe de Produto */}
       <Modal
         visible={modalVisible}
         animationType="fade"
@@ -205,31 +271,162 @@ export default function ECommerceScreen() {
             >
               <Text style={{color:"#3182ce", fontWeight:"bold"}}>Fechar</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.modalDeleteButton}
+              onPress={() => {
+                closeModal();
+                openDeleteModal(selectedProduct);
+              }}
+            >
+              <Text style={{color:"#d60000", fontWeight:"bold"}}>Excluir Produto</Text>
+            </TouchableOpacity>
           </View>
         </Pressable>
       </Modal>
-    </ScrollView>
+
+      {/* Modal Cadastro de Produto */}
+      <Modal
+        visible={registerModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={closeRegisterModal}
+      >
+        <View style={styles.modalBack}>
+          <View style={styles.cadastroCard}>
+            <Text style={styles.cadastroTitulo}>Cadastrar Produto</Text>
+            <View style={styles.centerFields}>
+              <TextInput
+                style={styles.input}
+                placeholder="Nome *"
+                value={formNome}
+                onChangeText={setFormNome}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Descrição"
+                value={formDesc}
+                onChangeText={setFormDesc}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Preço *"
+                value={formPreco}
+                onChangeText={setFormPreco}
+                keyboardType="numeric"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="URL da Imagem"
+                value={formImagem}
+                onChangeText={setFormImagem}
+              />
+              <TouchableOpacity
+                style={styles.modalAddButton}
+                onPress={handleAddProduct}
+              >
+                <Text style={styles.buttonText}>Adicionar Produto</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={closeRegisterModal}
+              >
+                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Exclusão de Produto */}
+      <Modal
+        visible={deleteModalVisible}
+        animationType="fade"
+        transparent
+        onRequestClose={closeDeleteModal}
+      >
+        <View style={styles.modalBack}>
+          <View style={[styles.cadastroCard, {maxWidth: 310}]}>
+            <View style={styles.centerFields}>
+              <Text style={{
+                color:"#d60000",
+                fontWeight: "bold",
+                fontSize: 18,
+                marginBottom: 16,
+                alignSelf: "center",
+              }}>
+                Excluir Produto
+              </Text>
+              <Text style={{fontSize:16, textAlign:'center', marginBottom:18}}>
+                Tem certeza que deseja excluir o produto{' '}
+                <Text style={{color:"#d60000",fontWeight:'bold'}}>
+                  {productToDelete?.nome}
+                </Text>
+                ?
+              </Text>
+              <TouchableOpacity
+                style={styles.modalDeleteButton}
+                onPress={handleDeleteProduct}
+              >
+                <Text style={{color:"#fff", fontWeight:"bold"}}>Excluir</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={closeDeleteModal}
+              >
+                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
+export default ECommerceScreen;
+
+// <<<<< CENTRALIZE O HEADER >>>>>
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    alignItems: "center",
+    flex: 1,
+    justifyContent: "center", // centraliza verticalmente
+    alignItems: "center",     // centraliza horizontalmente
     backgroundColor: "#f5f9fe",
-    padding: 18,
-    paddingBottom: 70,
+    padding: 19,
   },
-  title: {
-    fontSize: 24,
+  headerWrapper: {
+    justifyContent: "center", // ADICIONADO PARA CENTRALIZAR VERTICALMENTE
+    alignItems: "center",     // já estava para centralizar horizontalmente
+    paddingBottom: 8,
+    paddingTop: 70,           // Adiciona um espaço para não grudar no topo
+    backgroundColor: "#f5f9fe",
+    width: "100%",
+  },
+  footerContainer: {
+    alignItems: "center",
+    width: "100%",
+  },
+  centerFields: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: { fontSize: 22, fontWeight: "bold", marginBottom: 19, color: "#3182ce", textAlign: "center" },
+  cadastroButton: {
+    backgroundColor: "#23578a",
+    borderRadius: 9,
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    alignSelf: "center",
+    marginBottom: 16,
+  },
+  cadastroButtonText: {
+    color: "#fff",
     fontWeight: "bold",
-    marginTop: 6,
-    marginBottom: 14,
-    color: "#3182ce",
-    textAlign: "center"
+    fontSize: 15,
   },
   subtitle: {
-    fontSize: 18, fontWeight: "bold", marginTop: 14, marginBottom: 8, color: "#23578a"
+    fontSize: 18, fontWeight: "bold", marginTop: 6, marginBottom: 8, color: "#23578a", textAlign:"center"
   },
   productCard: {
     flexDirection: "row",
@@ -238,17 +435,18 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     marginBottom: 11,
-    width: "100%",
+    width: 330,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.09,
     shadowRadius: 3,
     elevation: 2,
+    alignSelf: "center"
   },
   productImage: {
     width: 48, height: 48, marginRight: 15, resizeMode: "contain"
   },
-  productName: { fontWeight: "bold", fontSize: 16, color: "#23292e" },
+  productName: { fontWeight: "bold", fontSize: 16, color: "#23292e", textAlign:"left" },
   productDesc: { color: "#5a6d8a", fontSize: 14, marginBottom: 7, flexWrap: "wrap" },
   productPrice: { fontWeight: "bold", color: "#3182ce", marginBottom: 5 },
   addButton: {
@@ -261,9 +459,17 @@ const styles = StyleSheet.create({
     marginLeft: 10,
   },
   buttonText: { color: "#fff", fontWeight: "bold", fontSize: 15 },
+  deleteButton: {
+    backgroundColor: "#d60000",
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginLeft: 5,
+    justifyContent: "center",
+    alignItems: "center"
+  },
   cartCard: {
-    width: "98%",
-    maxWidth: 370,
+    width: 330,
     backgroundColor: "#fff",
     borderRadius: 13,
     padding: 18,
@@ -273,6 +479,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.10,
     shadowRadius: 5,
+    alignSelf: "center",
   },
   cartItem: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8
@@ -285,7 +492,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginLeft: 8,
   },
-  totalLabel: { color: "#23578a", fontWeight: "bold", fontSize: 16, marginTop: 10, marginBottom: 7 },
+  totalLabel: { color: "#23578a", fontWeight: "bold", fontSize: 16, marginTop: 10, marginBottom: 7, textAlign:"center" },
   checkoutButton: {
     backgroundColor: "#3182ce",
     paddingVertical: 12,
@@ -307,6 +514,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center"
   },
+  input: {
+    width: "90%",
+    maxWidth: 320,
+    borderWidth: 1,
+    borderColor: "#b2c8e4",
+    borderRadius: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    fontSize: 17,
+    marginBottom: 10,
+    backgroundColor: "#fff",
+    textAlign: "center"
+  },
   // MODAL
   modalBack: {
     flex: 1,
@@ -321,8 +541,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 6,
     shadowColor: "#000",
-    width: "81%",
-    maxWidth: 370,
+    width: 330,
+    maxWidth: "90%",
   },
   modalImage: {
     width: 90,
@@ -348,6 +568,7 @@ const styles = StyleSheet.create({
     color: "#3182ce",
     fontSize: 18,
     marginBottom: 15,
+    textAlign: "center",
   },
   modalAddButton: {
     backgroundColor: "#3182ce",
@@ -364,5 +585,32 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     width: "100%",
     marginTop: 4,
+  },
+  modalDeleteButton: {
+    backgroundColor: "#d60000",
+    borderRadius: 7,
+    paddingVertical: 10,
+    alignItems: "center",
+    width: "100%",
+    marginTop: 7,
+    marginBottom: 6,
+  },
+  cadastroCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 25,
+    alignItems: "center",
+    elevation: 6,
+    shadowColor: "#000",
+    width: 330,
+    maxWidth: "90%",
+    justifyContent: "center",
+  },
+  cadastroTitulo: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#3182ce",
+    marginBottom: 12,
+    textAlign: "center",
   },
 });
