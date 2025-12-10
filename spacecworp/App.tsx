@@ -4,8 +4,8 @@ import ConsultaCNPJScreen from './src/screens/ConsultaCNPJScreen';
 import ECommerceScreen from './src/screens/ECommerceScreen';
 import TabBar from './src/components/TabBar';
 
-// Importação de Banner do Expo AdMob
-import { AdMobBanner } from 'expo-ads-admob';
+// Uso correto: apenas BannerAd do react-native-google-mobile-ads
+import { BannerAd, BannerAdSize, TestIds } from 'react-native-google-mobile-ads';
 
 export default function App() {
   const routes = [
@@ -20,20 +20,23 @@ export default function App() {
   else if (activeScreen === 1) CurrentScreen = ConsultaCNPJScreen;
   else if (activeScreen === 2) CurrentScreen = ECommerceScreen;
 
-  // Use este ID de teste para banners. Troque para o real para produção
+  // Teste ou substitua pelo seu ID banner real em produção
   const adUnitID = __DEV__ 
-    ? "ca-app-pub-3940256099942544/6300978111" 
-    : "ca-app-pub-xxxxxxxxxxxxxxxx/nnnnnnnnnn"; // substitua pelo seu real
+    ? TestIds.BANNER // <-- use TestIds.BANNER para desenvolvimento
+    : 'ca-app-pub-xxxxxxxxxxxxxxxx/yyyyyyyyyy';
 
   return (
     <>
       {CurrentScreen ? <CurrentScreen /> : null}
       <TabBar routes={routes} activeIndex={activeScreen} onNavigate={setActiveScreen} />
-      <AdMobBanner
-        bannerSize="smartBannerPortrait"
-        adUnitID={adUnitID}
-        servePersonalizedAds // true = anúncios personalizados
-        onDidFailToReceiveAdWithError={err => console.warn(err)}
+      
+      {/* Banner AdMob correto para react-native-google-mobile-ads */}
+      <BannerAd
+        unitId={adUnitID}
+        size={BannerAdSize.ADAPTIVE_BANNER}
+        requestOptions={{
+          requestNonPersonalizedAdsOnly: true,
+        }}
       />
     </>
   );
