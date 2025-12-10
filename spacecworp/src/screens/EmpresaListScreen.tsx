@@ -24,6 +24,11 @@ type GithubOrganization = {
   email?: string;
 };
 
+const API_BASE =
+  Platform.OS === 'web'
+    ? ''
+    : 'https://nuvem-tecnologica.vercel.app'; // << TROQUE AQUI pelo domínio do seu backend Next.js! (ex: https://minha-app.vercel.app)
+
 export default function GithubOrganizationsScreen() {
   const [orgs, setOrgs] = useState<GithubOrganization[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,7 +69,7 @@ export default function GithubOrganizationsScreen() {
               id: org.id,
               avatar_url: org.avatar_url,
               html_url: org.html_url || `https://github.com/${org.login}`,
-              description: '', // preenchido depois no fetchOrgDetails
+              description: '',
               email: undefined,
             }))
           );
@@ -128,11 +133,11 @@ export default function GithubOrganizationsScreen() {
     setModalVisible(false);
   };
 
-  // Envio de e-mail (call to your own API, do not call smtp/github directly)
+  // Envio de e-mail para API Next, usando URL correta para o ambiente
   const sendSaleEmail = async (org: GithubOrganization) => {
     if (!org.email) return;
     try {
-      const res = await fetch('/api/send-sale-email', {
+      const res = await fetch(`${API_BASE}/api/send-sale-email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,7 +151,7 @@ export default function GithubOrganizationsScreen() {
         alert('Falha ao enviar e-mail.');
       }
     } catch (e) {
-      alert('Erro ao enviar e-mail.');
+      alert('Erro ao enviar e-mail. ' + String(e));
     }
   };
 
@@ -222,7 +227,9 @@ export default function GithubOrganizationsScreen() {
                 ) : (
                   <>
                     <Text style={styles.modalDesc}>
-                      {selectedOrg.description || <Text style={{ fontStyle: 'italic', color: '#999' }}>Sem descrição</Text>}
+                      {selectedOrg.description || (
+                        <Text style={{ fontStyle: 'italic', color: '#999' }}>Sem descrição</Text>
+                      )}
                     </Text>
                     <Pressable
                       onPress={() => {
@@ -239,15 +246,15 @@ export default function GithubOrganizationsScreen() {
                     <Text style={styles.modalEmailTitle}>E-mail</Text>
                     <Text
                       selectable
-                      style={[styles.modalEmail, !selectedOrg.email && { color: '#aaa', fontStyle: 'italic' }]}
+                      style={[
+                        styles.modalEmail,
+                        !selectedOrg.email && { color: '#aaa', fontStyle: 'italic' },
+                      ]}
                     >
                       {selectedOrg.email ? selectedOrg.email : 'E-mail não informado'}
                     </Text>
                     {selectedOrg.email ? (
-                      <Pressable
-                        onPress={() => sendSaleEmail(selectedOrg)}
-                        style={styles.saleBtn}
-                      >
+                      <Pressable onPress={() => sendSaleEmail(selectedOrg)} style={styles.saleBtn}>
                         <Text style={styles.saleBtnText}>Enviar proposta de venda</Text>
                       </Pressable>
                     ) : null}
@@ -266,7 +273,6 @@ export default function GithubOrganizationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ... (mantenha os estilos anteriores)
   container: {
     flex: 1,
     backgroundColor: '#f8fafd',
@@ -389,7 +395,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: '#f2f2f2',
   },
-  modalName: { fontSize: 22, fontWeight: 'bold', color: '#23497a', textAlign: 'center', marginVertical: 6 },
+  modalName: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#23497a',
+    textAlign: 'center',
+    marginVertical: 6,
+  },
   modalId: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 9 },
   modalDesc: { fontSize: 16, color: '#444', fontStyle: 'italic', textAlign: 'center', marginBottom: 5 },
   modalEmailTitle: { fontSize: 14, color: '#3182ce', fontWeight: 'bold', marginTop: 17 },
