@@ -53,7 +53,7 @@ export default function EmpresaListsScreen() {
   const loginGithub = async () => {
     try {
       setError(null);
-      const result = await AuthSession.startAsync({ authUrl: AUTH_URL, returnUrl: REDIRECT_URI });
+      const result = await AuthSession.promptAsync({ url: AUTH_URL, redirectUri: REDIRECT_URI });
 
       // O resultado será { url, type }, se o login for sucesso, a url inclui ?code=...
       if (result.type === 'success' && result.url) {
