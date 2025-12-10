@@ -27,14 +27,11 @@ type EmpresaList = {
 
 type EmailFilter = "all" | "with" | "without";
 
-// Github OAuth details
-const CLIENT_ID = 'Ov23liorKatPx6WmfqD9'; // Substitua por seu Client ID do Github OAuth
-const REDIRECT_URI = AuthSession.makeRedirectUri({});
-const AUTH_URL =
-  `https://github.com/login/oauth/authorize` +
-  `?client_id=${CLIENT_ID}` +
-  `&scope=read:org` +
-  `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
+const CLIENT_ID = 'Ov23liorKatPx6WmfqD9';
+const discovery = {
+  authorizationEndpoint: 'https://github.com/login/oauth/authorize',
+  tokenEndpoint: 'https://github.com/login/oauth/access_token',
+};
 
 export default function EmpresaListsScreen() {
   const [orgs, setOrgs] = useState<EmpresaList[]>([]);
@@ -44,25 +41,26 @@ export default function EmpresaListsScreen() {
 
   const [selectedOrg, setSelectedOrg] = useState<EmpresaList | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
 
   const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
   const [token, setToken] = useState<string | null>(null);
 
-  // Github OAuth login flow
-  const loginGithub = async () => {
-    try {
-      setError(null);
-      const result = await AuthSession.promptAsync({ url: AUTH_URL, redirectUri: REDIRECT_URI });
+  // ----------- AUTENTICAÇÃO GITHUB via useAuthRequest e promptAsync -----------
+  const redirectUri = AuthSession.makeRedirectUri({});
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: CLIENT_ID,
+      scopes: ['read:org'],
+      redirectUri,
+    },
+    discovery
+  );
 
-      // O resultado será { url, type }, se o login for sucesso, a url inclui ?code=...
-      if (result.type === 'success' && result.url) {
-        const url = new URL(result.url);
-        const code = url.searchParams.get('code');
-
-        if (code) {
-          // Importante: Nunca exponha client_secret!
-          const res = await fetch('https://github.com/login/oauth/access_token', {
+  useEffect(() => {
+    (async () => {
+      if (response?.type === 'success' && response.params.code) {
+        try {
+          const res = await fetch(discovery.tokenEndpoint, {
             method: 'POST',
             headers: {
               Accept: 'application/json',
@@ -70,34 +68,27 @@ export default function EmpresaListsScreen() {
             },
             body: JSON.stringify({
               client_id: CLIENT_ID,
-              // client_secret: '', // NÃO coloque aqui em produção!
-              code,
-              redirect_uri: REDIRECT_URI,
+              code: response.params.code,
+              redirect_uri: redirectUri,
             }),
           });
           const data = await res.json();
           if (data.access_token) setToken(data.access_token);
-          else setError('Falha ao autenticar com o GitHub.');
-        } else {
-          setError('Código de autorização não fornecido.');
+          else setError('Falha ao autenticar com o Github.');
+        } catch {
+          setError('Erro ao trocar o código pelo token.');
         }
-      } else if (result.type !== 'success') {
-        setError('Autenticação cancelada ou falhou.');
       }
-    } catch (err) {
-      setError('Erro de autenticação GitHub.');
-    }
-  };
+    })();
+  }, [response]);
+  // --------------------------------------------------------------
 
-  // Busca detalhes de cada organização para email/descrição logo após carregar lista inicial
   const fetchOrgDetailsBatch = async (orgsBatch: EmpresaList[]) => {
     const updates = await Promise.all(
       orgsBatch.map(async org => {
         try {
           const res = await fetch(`https://api.github.com/orgs/${org.login}`, {
-            headers: token
-              ? { Authorization: `token ${token}` }
-              : {},
+            headers: token ? { Authorization: `token ${token}` } : {},
           });
           if (res.status !== 200) return org;
           const orgDetail = await res.json();
@@ -124,9 +115,7 @@ export default function EmpresaListsScreen() {
 
     try {
       const res = await fetch(endpoint, {
-        headers: token
-          ? { Authorization: `token ${token}` }
-          : {},
+        headers: token ? { Authorization: `token ${token}` } : {},
       });
       let data: any = [];
 
@@ -140,7 +129,6 @@ export default function EmpresaListsScreen() {
         }
       }
 
-      // Checa erro/rate limit na busca
       if (res.status !== 200) {
         setError('Erro ou limite de requisições da API do GitHub.');
         setOrgs([]);
@@ -173,7 +161,6 @@ export default function EmpresaListsScreen() {
         }
       }
 
-      // Carrega detalhes logo após trazer lista
       if (orgList.length) {
         const withDetails = await fetchOrgDetailsBatch(orgList);
         setOrgs(withDetails);
@@ -253,7 +240,11 @@ export default function EmpresaListsScreen() {
         </Text>
         <Text style={styles.subtitle}>É necessário autenticar-se com o GitHub para visualizar as organizações.</Text>
         {error && <Text style={styles.error}>{error}</Text>}
-        <Pressable onPress={loginGithub} style={styles.saleBtn}>
+        <Pressable
+          onPress={() => promptAsync()}
+          style={styles.saleBtn}
+          disabled={!request}
+        >
           <Text style={styles.saleBtnText}>Entrar com GitHub</Text>
         </Pressable>
       </View>
@@ -364,44 +355,38 @@ export default function EmpresaListsScreen() {
                 </View>
                 <Text style={styles.modalName}>{selectedOrg.login}</Text>
                 <Text style={styles.modalId}>ID: {selectedOrg.id}</Text>
-                {detailLoading ? (
-                  <ActivityIndicator size="small" color="#3182ce" style={{ marginVertical: 10 }} />
-                ) : (
-                  <>
-                    <Text style={styles.modalDesc}>
-                      {selectedOrg.description || (
-                        <Text style={{ fontStyle: 'italic', color: '#999' }}>Sem descrição</Text>
-                      )}
-                    </Text>
-                    <Pressable
-                      onPress={() => {
-                        if (Platform.OS === 'web') {
-                          window.open(selectedOrg.html_url, '_blank');
-                        } else {
-                          Linking.openURL(selectedOrg.html_url);
-                        }
-                      }}
-                      style={styles.modalLinkBtn}
-                    >
-                      <Text style={styles.modalLink}>{selectedOrg.html_url}</Text>
-                    </Pressable>
-                    <Text style={styles.modalEmailTitle}>E-mail</Text>
-                    <Text
-                      selectable
-                      style={[
-                        styles.modalEmail,
-                        !selectedOrg.email && { color: '#aaa', fontStyle: 'italic' },
-                      ]}
-                    >
-                      {selectedOrg.email ? selectedOrg.email : 'E-mail não informado'}
-                    </Text>
-                    {selectedOrg.email ? (
-                      <Pressable onPress={() => sendSaleEmail(selectedOrg)} style={styles.saleBtn}>
-                        <Text style={styles.saleBtnText}>Enviar proposta de venda</Text>
-                      </Pressable>
-                    ) : null}
-                  </>
-                )}
+                <Text style={styles.modalDesc}>
+                  {selectedOrg.description || (
+                    <Text style={{ fontStyle: 'italic', color: '#999' }}>Sem descrição</Text>
+                  )}
+                </Text>
+                <Pressable
+                  onPress={() => {
+                    if (Platform.OS === 'web') {
+                      window.open(selectedOrg.html_url, '_blank');
+                    } else {
+                      Linking.openURL(selectedOrg.html_url);
+                    }
+                  }}
+                  style={styles.modalLinkBtn}
+                >
+                  <Text style={styles.modalLink}>{selectedOrg.html_url}</Text>
+                </Pressable>
+                <Text style={styles.modalEmailTitle}>E-mail</Text>
+                <Text
+                  selectable
+                  style={[
+                    styles.modalEmail,
+                    !selectedOrg.email && { color: '#aaa', fontStyle: 'italic' },
+                  ]}
+                >
+                  {selectedOrg.email ? selectedOrg.email : 'E-mail não informado'}
+                </Text>
+                {selectedOrg.email ? (
+                  <Pressable onPress={() => sendSaleEmail(selectedOrg)} style={styles.saleBtn}>
+                    <Text style={styles.saleBtnText}>Enviar proposta de venda</Text>
+                  </Pressable>
+                ) : null}
                 <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
                   <Text style={{ color: '#fff', fontWeight: 'bold' }}>Fechar</Text>
                 </Pressable>
