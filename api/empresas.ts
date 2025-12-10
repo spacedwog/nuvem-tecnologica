@@ -4,7 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 // Inicialize o Firebase Admin apenas uma vez
 const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? '{}'
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? '{spacecworp-cac97}'
 );
 
 if (!getApps().length) {
