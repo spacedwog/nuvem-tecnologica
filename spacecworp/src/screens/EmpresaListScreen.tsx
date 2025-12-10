@@ -15,21 +15,19 @@ export default function EmpresaListScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Simulação: troque por chamada real a API de empresas se houver
     async function fetchEmpresas() {
       setLoading(true);
-      try {
-        // Endpoint da sua API Next.js integrada com Google People
-        const res = await fetch('https://nuvem-tecnologica.vercel.app/api/empresas');
-        const data = await res.json();
-        // Garante que 'data' sempre será interpretado como array de empresas
-        const lista =
-          Array.isArray(data) ? data :
-          Array.isArray(data.empresas) ? data.empresas :
-          [];
-        setEmpresas(lista);
-      } catch (err) {
-        setEmpresas([]);
-      }
+      // Buscar empresas usando seu backend ou serviço local
+      const res = await fetch('https://nuvem-tecnologica.vercel.app/api/empresas');
+      const data = await res.json();
+
+      // Caso não tenha API, use mock local:
+      // const data = [
+      //   { nome: 'Empresa X', email: 'vendas@empresax.com', cnpj: '00.000.000/0001-92', fantasia: 'EmpX' },
+      //   { nome: 'Empresa Y', email: 'contato@empresay.com', cnpj: '22.222.222/0001-55', fantasia: 'EmpY' }
+      // ];
+      setEmpresas(data);
       setLoading(false);
     }
     fetchEmpresas();
@@ -45,22 +43,12 @@ export default function EmpresaListScreen() {
         <ActivityIndicator size="large" color="#3182ce" style={{ marginTop: 26 }} />
       ) : (
         <ScrollView style={{ width: '100%' }}>
-          {Array.isArray(empresas) && empresas.length === 0 && (
-            <Text style={styles.empty}>Nenhuma empresa cadastrada.</Text>
-          )}
-          {Array.isArray(empresas) && empresas.map((empresa, idx) => (
-            <View key={empresa.cnpj || empresa.email || idx} style={styles.card}>
-              <Text style={styles.name}>
-                {empresa.nome}
-                {empresa.fantasia ? <Text style={styles.fantasia}> ({empresa.fantasia})</Text> : null}
-              </Text>
-              <Text style={styles.cnpj}>
-                <Text style={styles.label}>CNPJ: </Text> {empresa.cnpj || '—'}
-              </Text>
-              <Text style={styles.email}>
-                <Text style={styles.label}>E-mail: </Text>
-                <Text selectable>{empresa.email}</Text>
-              </Text>
+          {empresas.length === 0 && <Text style={styles.empty}>Nenhuma empresa cadastrada.</Text>}
+          {empresas.map((empresa, idx) => (
+            <View key={empresa.cnpj || idx} style={styles.card}>
+              <Text style={styles.name}>{empresa.nome} {empresa.fantasia ? <Text style={styles.fantasia}>({empresa.fantasia})</Text> : null}</Text>
+              <Text style={styles.cnpj}><Text style={styles.label}>CNPJ: </Text> {empresa.cnpj}</Text>
+              <Text style={styles.email}><Text style={styles.label}>E-mail: </Text><Text selectable>{empresa.email}</Text></Text>
             </View>
           ))}
         </ScrollView>

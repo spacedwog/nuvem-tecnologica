@@ -1,82 +1,52 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { google } from 'googleapis';
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
-// Variáveis de ambiente
-const SERVICE_ACCOUNT_ENV = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-const IMPERSONATE_EMAIL = process.env.GOOGLE_IMPERSONATE_EMAIL;
+// Inicialize o Firebase Admin apenas uma vez
+const serviceAccount = JSON.parse(
+  process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? '{}'
+);
 
-// Função auxiliar para parse do JSON da Conta de Serviço
-function parseServiceAccount() {
-  if (!SERVICE_ACCOUNT_ENV) return null;
-  try {
-    // Remove quebras de linha problemáticas, se necessário
-    return JSON.parse(SERVICE_ACCOUNT_ENV);
-  } catch (e) {
-    return null;
-  }
-}
-
-// Inicializa o serviço da People API autenticado
-function getPeopleService(serviceAccount: any) {
-  if (!serviceAccount || !IMPERSONATE_EMAIL) return null;
-
-  const auth = new google.auth.JWT({
-    email: serviceAccount.client_email,
-    key: serviceAccount.private_key,
-    scopes: [
-      'https://www.googleapis.com/auth/contacts.readonly'
-    ],
-    subject: IMPERSONATE_EMAIL
+if (!getApps().length) {
+  initializeApp({
+    credential: cert(serviceAccount),
   });
-
-  return google.people({ version: 'v1', auth });
 }
+
+const db = getFirestore();
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Método não suportado.' });
-  }
-
-  const serviceAccount = parseServiceAccount();
-
-  if (!serviceAccount) {
-    return res.status(500).json({ error: 'Service account JSON inválido ou não definido. Configure a variável GOOGLE_SERVICE_ACCOUNT_KEY.' });
-  }
-  if (!IMPERSONATE_EMAIL) {
-    return res.status(500).json({ error: 'Email para delegação não definido. Configure a variável GOOGLE_IMPERSONATE_EMAIL.' });
-  }
-
-  const peopleService = getPeopleService(serviceAccount);
-  if (!peopleService) {
-    return res.status(500).json({ error: 'Falha ao inicializar People API. Verifique suas configurações.' });
+    return res.status(405).json({ error: 'Método não suportado' });
   }
 
   try {
-    // Consulta os contatos. Ajuste o pageSize conforme sua necessidade
-    const response = await peopleService.people.connections.list({
-      resourceName: 'people/me',
-      pageSize: 50,
-      personFields: 'names,emailAddresses,organizations',
-    });
+    // Coleção: "empresas"
+    const snapshot = await db.collection('empresas').get();
+    const empresas = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...(doc.data() as {
+        nome?: string;
+        fantasia?: string;
+        cnpj?: string;
+        email?: string;
+        [key: string]: any;
+      }),
+    }));
 
-    // Normaliza para array esperado pelo frontend
-    const empresas = Array.isArray(response.data.connections)
-      ? response.data.connections.map(person => ({
-          nome: person.names?.[0]?.displayName ?? '',
-          fantasia: person.organizations?.[0]?.name ?? '',
-          cnpj: '', // CNPJ não existe diretamente na API, personalizado se quiser
-          email: person.emailAddresses?.[0]?.value ?? '',
-        }))
-      : [];
+    // Filtra apenas os campos principais se quiser
+    const cleanList = empresas.map(e => ({
+      nome: e.nome,
+      fantasia: e.fantasia,
+      cnpj: e.cnpj,
+      email: e.email,
+    }));
 
-    res.status(200).json(empresas);
+    res.status(200).json(cleanList);
   } catch (error: any) {
-    res.status(500).json({
-      error: error.message ?? 'Erro ao consultar Google People API.',
-      empresas: [],
-    });
+    res.status(500).json({ error: error.message ?? 'Erro ao buscar empresas' });
   }
 }
