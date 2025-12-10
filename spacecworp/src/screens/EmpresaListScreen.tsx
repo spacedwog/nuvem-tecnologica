@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as AuthSession from 'expo-auth-session';
 
 type EmpresaList = {
   login: string;
@@ -24,8 +25,16 @@ type EmpresaList = {
   email?: string;
 };
 
-// Opções de filtro
 type EmailFilter = "all" | "with" | "without";
+
+// Github OAuth details
+const CLIENT_ID = 'Ov23liorKatPx6WmfqD9'; // Substitua por seu Client ID do Github OAuth
+const REDIRECT_URI = AuthSession.makeRedirectUri({});
+const AUTH_URL =
+  `https://github.com/login/oauth/authorize` +
+  `?client_id=${CLIENT_ID}` +
+  `&scope=read:org` +
+  `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`;
 
 export default function EmpresaListsScreen() {
   const [orgs, setOrgs] = useState<EmpresaList[]>([]);
@@ -38,6 +47,72 @@ export default function EmpresaListsScreen() {
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
+  const [token, setToken] = useState<string | null>(null);
+
+  // Github OAuth login flow
+  const loginGithub = async () => {
+    try {
+      setError(null);
+      const result = await AuthSession.startAsync({ authUrl: AUTH_URL, returnUrl: REDIRECT_URI });
+
+      // O resultado será { url, type }, se o login for sucesso, a url inclui ?code=...
+      if (result.type === 'success' && result.url) {
+        const url = new URL(result.url);
+        const code = url.searchParams.get('code');
+
+        if (code) {
+          // Importante: Nunca exponha client_secret!
+          const res = await fetch('https://github.com/login/oauth/access_token', {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              client_id: CLIENT_ID,
+              // client_secret: '', // NÃO coloque aqui em produção!
+              code,
+              redirect_uri: REDIRECT_URI,
+            }),
+          });
+          const data = await res.json();
+          if (data.access_token) setToken(data.access_token);
+          else setError('Falha ao autenticar com o GitHub.');
+        } else {
+          setError('Código de autorização não fornecido.');
+        }
+      } else if (result.type !== 'success') {
+        setError('Autenticação cancelada ou falhou.');
+      }
+    } catch (err) {
+      setError('Erro de autenticação GitHub.');
+    }
+  };
+
+  // Busca detalhes de cada organização para email/descrição logo após carregar lista inicial
+  const fetchOrgDetailsBatch = async (orgsBatch: EmpresaList[]) => {
+    const updates = await Promise.all(
+      orgsBatch.map(async org => {
+        try {
+          const res = await fetch(`https://api.github.com/orgs/${org.login}`, {
+            headers: token
+              ? { Authorization: `token ${token}` }
+              : {},
+          });
+          if (res.status !== 200) return org;
+          const orgDetail = await res.json();
+          return {
+            ...org,
+            description: orgDetail.description || '',
+            email: orgDetail.email || undefined,
+          };
+        } catch {
+          return org;
+        }
+      })
+    );
+    return updates;
+  };
 
   const fetchOrgs = async (query: string) => {
     setLoading(true);
@@ -48,7 +123,11 @@ export default function EmpresaListsScreen() {
       : 'https://api.github.com/organizations';
 
     try {
-      const res = await fetch(endpoint);
+      const res = await fetch(endpoint, {
+        headers: token
+          ? { Authorization: `token ${token}` }
+          : {},
+      });
       let data: any = [];
 
       if ((res.headers.get('content-type') || '').includes('application/json')) {
@@ -61,36 +140,45 @@ export default function EmpresaListsScreen() {
         }
       }
 
+      // Checa erro/rate limit na busca
+      if (res.status !== 200) {
+        setError('Erro ou limite de requisições da API do GitHub.');
+        setOrgs([]);
+        setLoading(false);
+        return;
+      }
+
+      let orgList: EmpresaList[] = [];
       if (endpoint.includes('/search/')) {
         if (Array.isArray(data.items)) {
-          setOrgs(
-            data.items.map((org: any) => ({
-              login: org.login,
-              id: org.id,
-              avatar_url: org.avatar_url,
-              html_url: org.html_url || `https://github.com/${org.login}`,
-              description: '',
-              email: undefined,
-            }))
-          );
-        } else {
-          setOrgs([]);
+          orgList = data.items.map((org: any) => ({
+            login: org.login,
+            id: org.id,
+            avatar_url: org.avatar_url,
+            html_url: org.html_url || `https://github.com/${org.login}`,
+            description: '',
+            email: undefined,
+          }));
         }
       } else {
         if (Array.isArray(data)) {
-          setOrgs(
-            data.map((org: any) => ({
-              login: org.login,
-              id: org.id,
-              avatar_url: org.avatar_url,
-              html_url: org.html_url || org.url || `https://github.com/${org.login}`,
-              description: '',
-              email: undefined,
-            }))
-          );
-        } else {
-          setOrgs([]);
+          orgList = data.map((org: any) => ({
+            login: org.login,
+            id: org.id,
+            avatar_url: org.avatar_url,
+            html_url: org.html_url || org.url || `https://github.com/${org.login}`,
+            description: '',
+            email: undefined,
+          }));
         }
+      }
+
+      // Carrega detalhes logo após trazer lista
+      if (orgList.length) {
+        const withDetails = await fetchOrgDetailsBatch(orgList);
+        setOrgs(withDetails);
+      } else {
+        setOrgs([]);
       }
     } catch (err) {
       setError('Erro ao buscar organizações.');
@@ -100,40 +188,12 @@ export default function EmpresaListsScreen() {
   };
 
   useEffect(() => {
-    fetchOrgs('');
-  }, []);
+    if (token) fetchOrgs('');
+  }, [token]);
 
-  // Busca detalhes ao abrir modal
   const openModal = (org: EmpresaList) => {
     setSelectedOrg(org);
     setModalVisible(true);
-    fetchOrgDetails(org.login);
-  };
-
-  const fetchOrgDetails = async (login: string) => {
-    setDetailLoading(true);
-    try {
-      const res = await fetch(`https://api.github.com/orgs/${login}`);
-      const orgDetail = await res.json();
-      setSelectedOrg(prev =>
-        prev
-          ? {
-              ...prev,
-              description: orgDetail.description || '',
-              email: orgDetail.email || undefined,
-            }
-          : prev
-      );
-      // Preenche e-mail também na listagem se desejar (opcional)
-      setOrgs(prev =>
-        prev.map(org =>
-          org.login === login
-            ? { ...org, email: orgDetail.email || undefined }
-            : org
-        )
-      );
-    } catch {}
-    setDetailLoading(false);
   };
 
   const closeModal = () => {
@@ -141,7 +201,6 @@ export default function EmpresaListsScreen() {
     setModalVisible(false);
   };
 
-  // Envio de e-mail usando link mailto: abre no aplicativo padrão do usuário
   const sendSaleEmail = (org: EmpresaList) => {
     if (!org.email) return;
     const subject = encodeURIComponent(`Proposta de Software para ${org.login}`);
@@ -156,7 +215,6 @@ export default function EmpresaListsScreen() {
     }
   };
 
-  // Filtro das empresas de acordo com o radio selecionado
   const orgsFiltered = orgs.filter(org => {
     if (emailFilter === "all") return true;
     if (emailFilter === "with") return !!org.email;
@@ -164,7 +222,6 @@ export default function EmpresaListsScreen() {
     return true;
   });
 
-  // Componente simples de radio button
   const RadioButton = ({
     value,
     label,
@@ -188,10 +245,25 @@ export default function EmpresaListsScreen() {
     </TouchableOpacity>
   );
 
+  if (!token) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>
+          <Ionicons name="business-outline" size={26} color="#3182ce" /> Empresas
+        </Text>
+        <Text style={styles.subtitle}>É necessário autenticar-se com o GitHub para visualizar as organizações.</Text>
+        {error && <Text style={styles.error}>{error}</Text>}
+        <Pressable onPress={loginGithub} style={styles.saleBtn}>
+          <Text style={styles.saleBtnText}>Entrar com GitHub</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>
-        <Ionicons name="business-outline" size={26} color="#3182ce" /> Organizações do GitHub
+        <Ionicons name="business-outline" size={26} color="#3182ce" /> Empresas
       </Text>
       <Text style={styles.subtitle}>Pesquise organizações e proponha venda de software</Text>
       <View style={styles.searchArea}>
@@ -209,26 +281,29 @@ export default function EmpresaListsScreen() {
         </Pressable>
       </View>
 
-      {/* Radio Buttons */}
       <View style={styles.radioGroup}>
-        <RadioButton
-          value="all"
-          label="Todas"
-          selected={emailFilter === "all"}
-          onPress={setEmailFilter}
-        />
-        <RadioButton
-          value="with"
-          label="Somente com e-mail"
-          selected={emailFilter === "with"}
-          onPress={setEmailFilter}
-        />
-        <RadioButton
-          value="without"
-          label="Somente sem e-mail"
-          selected={emailFilter === "without"}
-          onPress={setEmailFilter}
-        />
+        <View style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+          <RadioButton
+            value="all"
+            label="Todas"
+            selected={emailFilter === "all"}
+            onPress={setEmailFilter}
+          />
+          <View style={{ flexDirection: 'row', marginTop: 5 }}>
+            <RadioButton
+              value="with"
+              label="Somente com e-mail"
+              selected={emailFilter === "with"}
+              onPress={setEmailFilter}
+            />
+            <RadioButton
+              value="without"
+              label="Somente sem e-mail"
+              selected={emailFilter === "without"}
+              onPress={setEmailFilter}
+            />
+          </View>
+        </View>
       </View>
 
       {error && <Text style={styles.error}>{error}</Text>}
@@ -237,7 +312,10 @@ export default function EmpresaListsScreen() {
       ) : (
         <ScrollView style={{ width: '100%' }} keyboardShouldPersistTaps="handled">
           {orgsFiltered.length === 0 ? (
-            <Text style={styles.empty}>Nenhuma organização encontrada.</Text>
+            <Text style={styles.empty}>
+              Nenhuma organização encontrada.
+              {(emailFilter === "with" || emailFilter === "without") && "\nPoucas organizações públicas informam e-mail no GitHub."}
+            </Text>
           ) : (
             orgsFiltered.map((org) => (
               <TouchableOpacity key={org.id} style={styles.card} onPress={() => openModal(org)}>
@@ -380,7 +458,7 @@ const styles = StyleSheet.create({
   radioGroup: {
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 9,
     marginTop: -2,
   },
