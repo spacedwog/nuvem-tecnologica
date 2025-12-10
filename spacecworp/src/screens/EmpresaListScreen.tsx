@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-type GithubOrganization = {
+type EmpresaList = {
   login: string;
   id: number;
   avatar_url: string;
@@ -24,18 +24,13 @@ type GithubOrganization = {
   email?: string;
 };
 
-const API_BASE =
-  Platform.OS === 'web'
-    ? ''
-    : 'https://nuvem-tecnologica.vercel.app'; // << TROQUE AQUI pelo domínio do seu backend Next.js! (ex: https://minha-app.vercel.app)
-
-export default function GithubOrganizationsScreen() {
-  const [orgs, setOrgs] = useState<GithubOrganization[]>([]);
+export default function EmpresaListsScreen() {
+  const [orgs, setOrgs] = useState<EmpresaList[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedOrg, setSelectedOrg] = useState<GithubOrganization | null>(null);
+  const [selectedOrg, setSelectedOrg] = useState<EmpresaList | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -104,7 +99,7 @@ export default function GithubOrganizationsScreen() {
   }, []);
 
   // Busca detalhes ao abrir modal
-  const openModal = (org: GithubOrganization) => {
+  const openModal = (org: EmpresaList) => {
     setSelectedOrg(org);
     setModalVisible(true);
     fetchOrgDetails(org.login);
@@ -133,25 +128,18 @@ export default function GithubOrganizationsScreen() {
     setModalVisible(false);
   };
 
-  // Envio de e-mail para API Next, usando URL correta para o ambiente
-  const sendSaleEmail = async (org: GithubOrganization) => {
+  // Envio de e-mail usando link mailto: abre no aplicativo padrão do usuário
+  const sendSaleEmail = (org: EmpresaList) => {
     if (!org.email) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/send-sale-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: org.email,
-          orgName: org.login,
-        }),
-      });
-      if (res.ok) {
-        alert('Proposta de venda enviada com sucesso!');
-      } else {
-        alert('Falha ao enviar e-mail.');
-      }
-    } catch (e) {
-      alert('Erro ao enviar e-mail. ' + String(e));
+    const subject = encodeURIComponent(`Proposta de Software para ${org.login}`);
+    const body = encodeURIComponent(
+      `Olá equipe ${org.login},\n\nGostaria de apresentar uma proposta de software que pode ajudar a sua organização. Podemos conversar?\n\nAtenciosamente,\n[Seu nome ou empresa]`
+    );
+    const mailto = `mailto:${org.email}?subject=${subject}&body=${body}`;
+    if (Platform.OS === 'web') {
+      window.open(mailto, '_blank');
+    } else {
+      Linking.openURL(mailto);
     }
   };
 
