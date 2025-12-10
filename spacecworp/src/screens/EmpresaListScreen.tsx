@@ -24,27 +24,10 @@ type EmpresaList = {
   email?: string;
 };
 
-type ReceitaWsData = {
-  status?: string;
-  nome?: string;
-  fantasia?: string;
-  cnpj?: string;
-  telefone?: string;
-  email?: string;
-  atividade_principal?: Array<{ code: string; text: string }>;
-  uf?: string;
-  municipio?: string;
-  bairro?: string;
-  logradouro?: string;
-  numero?: string;
-  cep?: string;
-  aberta?: string;
-};
-
 type EmailFilter = "all" | "with" | "without";
 
-// Token pessoal do GitHub
-const token = "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";
+// Token pessoal do GitHub -- troque por seu próprio token
+const token = "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";
 
 export default function EmpresaListsScreen() {
   const [orgs, setOrgs] = useState<EmpresaList[]>([]);
@@ -54,12 +37,9 @@ export default function EmpresaListsScreen() {
 
   const [selectedOrg, setSelectedOrg] = useState<EmpresaList | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
-  const [receitaData, setReceitaData] = useState<ReceitaWsData | null>(null);
-  const [receitaLoading, setReceitaLoading] = useState(false);
 
   const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
 
-  // Busca inicial ao montar
   useEffect(() => {
     fetchOrgs('');
   }, []);
@@ -110,7 +90,6 @@ export default function EmpresaListsScreen() {
         }
       }
 
-      // Tratamento detalhado de erros da API
       if (res.status !== 200) {
         let msg = 'Erro desconhecido.';
         if (data && data.message) {
@@ -168,46 +147,15 @@ export default function EmpresaListsScreen() {
     setLoading(false);
   };
 
-  const fetchReceitaWS = async (userNameOrCNPJ: string) => {
-    setReceitaLoading(true);
-    setReceitaData(null);
-
-    let cnpjQuery = userNameOrCNPJ.replace(/[^\d]/g, '');
-    // Se for um CNPJ válido faz a consulta, caso contrário tenta buscar pelo usuário (login como nome fantasia)
-    if (cnpjQuery.length === 14) {
-      try {
-        const response = await fetch(`https://www.receitaws.com.br/v1/cnpj/${cnpjQuery}`, {
-          headers: { Accept: 'application/json' },
-        });
-        const data = await response.json();
-        setReceitaData(data);
-      } catch (err) {
-        setReceitaData({ status: 'error', nome: '', cnpj: cnpjQuery });
-      }
-    } else {
-      // Opção extra: procurar pela razão social usando login
-      try {
-        const response = await fetch(`https://www.receitaws.com.br/v1/cnpj/${userNameOrCNPJ}`, {
-          headers: { Accept: 'application/json' },
-        });
-        const data = await response.json();
-        setReceitaData(data);
-      } catch (err) {
-        setReceitaData({ status: 'error', nome: userNameOrCNPJ });
-      }
-    }
-    setReceitaLoading(false);
-  };
+  // Removido tudo sobre a API de e-mail fictícia.
 
   const openModal = (org: EmpresaList) => {
     setSelectedOrg(org);
     setModalVisible(true);
-    fetchReceitaWS(org.login);
   };
 
   const closeModal = () => {
     setSelectedOrg(null);
-    setReceitaData(null);
     setModalVisible(false);
   };
 
@@ -392,43 +340,6 @@ export default function EmpresaListsScreen() {
                     <Text style={styles.saleBtnText}>Enviar proposta de venda</Text>
                   </Pressable>
                 ) : null}
-
-                {/* Bloco da ReceitaWS */}
-                <View style={{ width: '100%', marginTop: 12 }}>
-                  <Text style={{ fontWeight: 'bold', color: '#3182ce', fontSize: 17, marginBottom: 5 }}>
-                    Dados da ReceitaWS
-                  </Text>
-                  {receitaLoading ? (
-                    <ActivityIndicator size="small" color="#3182ce" style={{ marginVertical: 8 }} />
-                  ) : receitaData && receitaData.status === 'ERROR' ? (
-                    <Text style={{ color: '#c42c00' }}>Erro ao buscar dados na ReceitaWS.</Text>
-                  ) : receitaData && receitaData.nome ? (
-                    <>
-                      <Text>Razão social: <Text style={{ fontWeight: 'bold' }}>{receitaData.nome}</Text></Text>
-                      {receitaData.cnpj && <Text>CNPJ: {receitaData.cnpj}</Text>}
-                      {receitaData.fantasia && <Text>Nome fantasia: {receitaData.fantasia}</Text>}
-                      {receitaData.email && <Text>Email ReceitaWS: {receitaData.email}</Text>}
-                      {receitaData.telefone && <Text>Telefone: {receitaData.telefone}</Text>}
-                      {receitaData.atividade_principal && receitaData.atividade_principal.length > 0 && (
-                        <Text>
-                          Atividade principal: {receitaData.atividade_principal[0].text}
-                        </Text>
-                      )}
-                      {receitaData.uf && receitaData.municipio && (
-                        <Text>Localização: {receitaData.municipio} - {receitaData.uf}</Text>
-                      )}
-                      {receitaData.logradouro && (
-                        <Text>
-                          Endereço:{' '}
-                          {receitaData.logradouro}, {receitaData.numero} - {receitaData.bairro}, {receitaData.cep}
-                        </Text>
-                      )}
-                      {receitaData.aberta && <Text>Data de abertura: {receitaData.aberta}</Text>}
-                    </>
-                  ) : (
-                    <Text>Nenhum dado retornado da ReceitaWS.</Text>
-                  )}
-                </View>
 
                 <Pressable onPress={closeModal} style={styles.modalCloseBtn}>
                   <Text style={{ color: '#fff', fontWeight: 'bold' }}>Fechar</Text>
