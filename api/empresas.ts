@@ -2,10 +2,12 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+// Confira se a environment variable foi definida corretamente
+const firebaseKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+if (!firebaseKey) throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY não definida! O valor deve ser o JSON completo da chave de serviço do Firebase.');
+
 // Inicialize o Firebase Admin apenas uma vez
-const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? '{spacecworp-cac97}'
-);
+const serviceAccount = JSON.parse(firebaseKey);
 
 if (!getApps().length) {
   initializeApp({
@@ -37,7 +39,7 @@ export default async function handler(
       }),
     }));
 
-    // Filtra apenas os campos principais se quiser
+    // Retorna apenas os campos principais
     const cleanList = empresas.map(e => ({
       nome: e.nome,
       fantasia: e.fantasia,
