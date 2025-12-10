@@ -1,19 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { google } from 'googleapis';
 
-// Inicialize o Firebase Admin apenas uma vez
-const serviceAccount = JSON.parse(
-  process.env.FIREBASE_SERVICE_ACCOUNT_KEY ?? '{}'
-);
+// Configuração Service Account com Delegação
+const serviceAccount = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY ?? '{}');
+const USER_TO_IMPERSONATE = process.env.GOOGLE_IMPERSONATE_EMAIL;
 
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount),
+const getPeopleService = () => {
+  const auth = new google.auth.JWT({
+    email: serviceAccount.client_email,
+    key: serviceAccount.private_key,
+    scopes: [
+      'https://www.googleapis.com/auth/contacts.readonly',
+    ],
+    subject: USER_TO_IMPERSONATE,
   });
-}
 
-const db = getFirestore();
+  return google.people({ version: 'v1', auth });
+};
 
 export default async function handler(
   req: NextApiRequest,
@@ -24,29 +27,27 @@ export default async function handler(
   }
 
   try {
-    // Coleção: "empresas"
-    const snapshot = await db.collection('empresas').get();
-    const empresas = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...(doc.data() as {
-        nome?: string;
-        fantasia?: string;
-        cnpj?: string;
-        email?: string;
-        [key: string]: any;
-      }),
+    const peopleService = getPeopleService();
+
+    // Consulte os contatos (pessoas) do usuário delegado
+    const response = await peopleService.people.connections.list({
+      resourceName: 'people/me',
+      pageSize: 20,
+      personFields: 'names,emailAddresses,organizations',
+    });
+
+    // Mapeie para o formato que o frontend espera
+    const empresas = (response.data.connections || []).map(person => ({
+      nome: person.names?.[0]?.displayName ?? '',
+      fantasia: person.organizations?.[0]?.name ?? '', // Fantasia via organização
+      cnpj: '', // Não existe CNPJ na People API, deve ser customizado se quiser buscar em um campo custom
+      email: person.emailAddresses?.[0]?.value ?? '',
     }));
 
-    // Filtra apenas os campos principais se quiser
-    const cleanList = empresas.map(e => ({
-      nome: e.nome,
-      fantasia: e.fantasia,
-      cnpj: e.cnpj,
-      email: e.email,
-    }));
-
-    res.status(200).json(cleanList);
+    res.status(200).json(empresas);
   } catch (error: any) {
-    res.status(500).json({ error: error.message ?? 'Erro ao buscar empresas' });
+    res.status(500).json({
+      error: error.message ?? 'Erro ao buscar empresas (API People)',
+    });
   }
 }
