@@ -11,7 +11,6 @@ import {
   TextInput,
 } from "react-native";
 import { Clipboard } from "react-native";
-import * as ImagePicker from "expo-image-picker";
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -193,26 +192,6 @@ function ECommerceScreen() {
     setFormDesc("");
     setFormPreco("");
     setFormImagem("");
-  }
-
-  async function handleChooseImage() {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permissão negada",
-        "Você precisa fornecer permissão para acessar a galeria."
-      );
-      return;
-    }
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.96,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setFormImagem(result.assets[0].uri);
-    }
   }
 
   function handleAddProduct() {
@@ -413,11 +392,12 @@ function ECommerceScreen() {
                 onChangeText={setFormPreco}
                 keyboardType="numeric"
               />
-              <TouchableOpacity style={styles.chooseImageButton} onPress={handleChooseImage}>
-                <Text style={{ color: "#3182ce", fontWeight: "bold", fontSize: 15 }}>
-                  Escolher Imagem da Galeria
-                </Text>
-              </TouchableOpacity>
+              <TextInput
+                style={styles.input}
+                placeholder="URL da Imagem (opcional)"
+                value={formImagem}
+                onChangeText={setFormImagem}
+              />
               {formImagem ? (
                 <Image
                   source={{ uri: formImagem }}
