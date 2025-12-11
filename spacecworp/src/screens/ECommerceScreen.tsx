@@ -8,10 +8,9 @@ import {
   Image,
   Alert,
   Modal,
-  Pressable,
   TextInput
 } from "react-native";
-import { PaymentSheet, initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-native";
+import { Clipboard } from "react-native"; // <-- Usar Clipboard do próprio react-native.
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -21,9 +20,80 @@ function formatBRL(value: number) {
   });
 }
 
+// Modal Pix corrigido: COPIAR SEM FECHAR
+function PixQRCodeModal({
+  visible,
+  onClose,
+  pixQr
+}: { visible: boolean; onClose: () => void; pixQr: string | null }) {
+  const [copyStatus, setCopyStatus] = useState<string>("");
+
+  async function handleCopyPix() {
+    if (!pixQr) return;
+    Clipboard.setString(pixQr); // <-- react-native Clipboard
+    setCopyStatus("Copiado!");
+    setTimeout(() => setCopyStatus(""), 1500);
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalBack}>
+        <View style={styles.modalCard}>
+          <Text style={{ fontWeight: "bold", fontSize: 18, color: "#3182ce", marginBottom: 6 }}>
+            Pague com Pix
+          </Text>
+          <Text style={{ fontSize: 15, textAlign: "center", marginBottom: 11 }}>
+            Escaneie o código Pix com seu banco ou copie o código abaixo.
+          </Text>
+          {pixQr ? (
+            <>
+              <Text
+                selectable
+                style={{
+                  fontSize: 12,
+                  marginBottom: 12,
+                  backgroundColor: "#f4f4f4",
+                  padding: 10,
+                  borderRadius: 6,
+                  minWidth: 240,
+                  textAlign: "center"
+                }}
+              >
+                {pixQr}
+              </Text>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: "#3182ce",
+                  paddingVertical: 8,
+                  paddingHorizontal: 22,
+                  borderRadius: 8,
+                  marginBottom: 5,
+                  alignSelf: "center"
+                }}
+                onPress={handleCopyPix}
+                activeOpacity={0.82}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>Copiar código Pix</Text>
+              </TouchableOpacity>
+              {copyStatus ? (
+                <Text style={{ color: "#32a852", fontWeight: "bold", marginTop: 5 }}>{copyStatus}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text>Carregando QR Pix...</Text>
+          )}
+          <TouchableOpacity style={styles.modalCloseButton} onPress={onClose}>
+            <Text style={{ fontWeight: "bold", color: "#3182ce", fontSize: 15 }}>Fechar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 function ECommerceScreen() {
   const [products, setProducts] = useState<any[]>([]);
-  const [cart, setCart] = useState<{ id: string; qtd: number }[]>([]);
+  const [cart, setCart] = useState<{id: string; qtd: number}[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -38,12 +108,16 @@ function ECommerceScreen() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [productToDelete, setProductToDelete] = useState<any | null>(null);
 
+  // Pix
+  const [pixModal, setPixModal] = useState(false);
+  const [pixQr, setPixQr] = useState<string | null>(null);
+
   function addToCart(productId: string) {
     setCart((prev) => {
       const found = prev.find((item) => item.id === productId);
       if (found) {
         return prev.map((item) =>
-          item.id === productId ? { ...item, qtd: item.qtd + 1 } : item
+          item.id === productId ? {...item, qtd: item.qtd + 1} : item
         );
       } else {
         return [...prev, { id: productId, qtd: 1 }];
@@ -53,75 +127,49 @@ function ECommerceScreen() {
   }
 
   function removeFromCart(productId: string) {
-    setCart((prev) =>
-      prev
-        .map((item) =>
-          item.id === productId ? { ...item, qtd: item.qtd - 1 } : item
-        )
-        .filter((item) => item.qtd > 0)
-    );
+    setCart((prev) => prev
+      .map((item) => item.id === productId ? {...item, qtd: item.qtd - 1} : item)
+      .filter((item) => item.qtd > 0));
   }
 
   function clearCart() {
     setCart([]);
   }
 
-  function handleCheckout() {
-    Alert.alert("Pedido confirmado!", "Compra realizada com sucesso!");
-    clearCart();
+  // Gera o Pix ao finalizar compra
+  async function handleCheckoutPix() {
+    try {
+      const totalValue = cart.reduce((sum, item) => {
+        const p = products.find(prod => prod.id === item.id);
+        return sum + ((p?.preco ?? 0) * item.qtd);
+      }, 0);
+      const pixKey = "62904267000160"; // Troque para chave Pix real!
+      const response = await fetch("https://nuvem-tecnologica.vercel.app/api/pix", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          action: 'initiate',
+          amount: totalValue,
+          key: pixKey,
+          nome_fantasia: "E-Commerce",
+          cidade: "SAO PAULO",
+          description: "Pedido E-Commerce",
+        }),
+      });
+      const data = await response.json();
+      if (data.qr) {
+        setPixQr(data.qr);
+        setPixModal(true);
+      } else {
+        Alert.alert("Erro ao gerar Pix", data.error || "Erro desconhecido");
+      }
+    } catch (err: any) {
+      Alert.alert("Falha ao gerar Pix", err?.message || "Erro desconhecido");
+    }
   }
 
-  /**
-   * Stripe PaymentSheet integration
-   * O backend de exemplo está incluído abaixo!
-   */
-  async function handleCheckoutStripe() {
-    const totalAmount = Math.round(
-      cart.reduce(
-        (sum, cartItem) => {
-          const product = products.find((p) => p.id === cartItem.id);
-          return sum + ((product?.preco || 0) * cartItem.qtd);
-        },
-        0
-      ) * 100
-    );
-
-    // Chama o backend para gerar o PaymentIntent e fornecer informações!
-    const response = await fetch("http://localhost:4242/payment-sheet", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        amount: totalAmount,
-        currency: "brl",
-      }),
-    });
-    const { paymentIntent, ephemeralKey, customer } = await response.json();
-
-    const { error: initError } = await initPaymentSheet({
-      merchantDisplayName: "Sua Loja",
-      paymentIntentClientSecret: paymentIntent,
-      customerEphemeralKeySecret: ephemeralKey,
-      customerId: customer,
-      applePay: { merchantCountryCode: "BR" },
-      googlePay: {
-        merchantCountryCode: ""
-      },
-      style: "automatic",
-    });
-
-    if (initError) {
-      Alert.alert("Erro ao inicializar PaymentSheet", initError.message);
-      return;
-    }
-
-    const { error: presentError } = await presentPaymentSheet();
-
-    if (presentError) {
-      Alert.alert("Pagamento falhou", presentError.message);
-    } else {
-      Alert.alert("Pagamento realizado!", "Compra via Stripe realizada com sucesso.");
-      clearCart();
-    }
+  function handleCheckout() {
+    handleCheckoutPix();
   }
 
   function openModal(product: any) {
@@ -148,8 +196,8 @@ function ECommerceScreen() {
       Alert.alert("Campos obrigatórios", "Preencha nome e preço do produto.");
       return;
     }
-    const nextId = String(Number(products[products.length - 1]?.id || 0) + 1);
-    setProducts((prev) => [
+    const nextId = String(Number(products[products.length-1]?.id || 0) + 1);
+    setProducts(prev => [
       ...prev,
       {
         id: nextId,
@@ -157,7 +205,7 @@ function ECommerceScreen() {
         descricao: formDesc,
         preco: Number(formPreco),
         imagem: formImagem || undefined,
-      },
+      }
     ]);
     closeRegisterModal();
   }
@@ -174,26 +222,26 @@ function ECommerceScreen() {
 
   function handleDeleteProduct() {
     if (productToDelete) {
-      setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
-      setCart((prev) => prev.filter((c) => c.id !== productToDelete.id));
+      setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
+      setCart(prev => prev.filter(c => c.id !== productToDelete.id));
     }
     closeDeleteModal();
-    if (selectedProduct?.id === productToDelete?.id) closeModal();
+    if(selectedProduct?.id === productToDelete?.id) closeModal();
   }
 
-  const cartItems = cart.map(({ id, qtd }) => {
+  const cartItems = cart.map(({id, qtd}) => {
     const product = products.find((p) => p.id === id);
     return { ...product, qtd };
   });
-  const total = cartItems.reduce(
-    (sum, item) => sum + (item?.preco || 0) * (item.qtd || 0),
-    0
-  );
+  const total = cartItems.reduce((sum, item) => sum + (item?.preco || 0) * (item.qtd || 0), 0);
 
   const ListHeader = () => (
     <View style={styles.headerWrapper}>
       <Text style={styles.title}>E-Commerce</Text>
-      <TouchableOpacity style={styles.cadastroButton} onPress={openRegisterModal}>
+      <TouchableOpacity
+        style={styles.cadastroButton}
+        onPress={openRegisterModal}
+      >
         <Text style={styles.cadastroButtonText}>Cadastrar Produto</Text>
       </TouchableOpacity>
       <Text style={styles.subtitle}>Produtos</Text>
@@ -208,7 +256,10 @@ function ECommerceScreen() {
       ) : (
         <View style={styles.cartCard}>
           {cartItems.map((item) => (
-            <View key={item.id} style={styles.cartItem}>
+            <View
+              key={item.id}
+              style={styles.cartItem}
+            >
               <Text style={styles.cartItemText}>
                 {item.nome} x {item.qtd} = {formatBRL((item.preco ?? 0) * item.qtd)}
               </Text>
@@ -221,24 +272,21 @@ function ECommerceScreen() {
             </View>
           ))}
           <Text style={styles.totalLabel}>Total: {formatBRL(total)}</Text>
-          {/* Botão Checkout padrão */}
-          <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>Finalizar Compra</Text>
-          </TouchableOpacity>
-          {/* Botão Stripe PaymentSheet (Google Pay/Apple Pay) */}
           <TouchableOpacity
-            style={[styles.checkoutButton, { backgroundColor: "#635bff" }]}
-            onPress={handleCheckoutStripe}
+            style={styles.checkoutButton}
+            onPress={handleCheckout}
           >
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>
-              Pagar com Google Pay / Apple Pay
-            </Text>
+            <Text style={{color:"#fff", fontWeight:"bold"}}>Finalizar Compra</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.clearCartButton} onPress={clearCart}>
-            <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Limpar Carrinho</Text>
+          <TouchableOpacity
+            style={styles.clearCartButton}
+            onPress={clearCart}
+          >
+            <Text style={{color:"#3182ce", fontWeight:"bold"}}>Limpar Carrinho</Text>
           </TouchableOpacity>
         </View>
       )}
+      <PixQRCodeModal visible={pixModal} onClose={() => setPixModal(false)} pixQr={pixQr} />
     </View>
   );
 
@@ -249,9 +297,12 @@ function ECommerceScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
-        renderItem={({ item }) => (
-          <View style={{ alignItems: "center" }}>
-            <TouchableOpacity onPress={() => openModal(item)} activeOpacity={0.87}>
+        renderItem={({item}) => (
+          <View style={{alignItems: "center"}}>
+            <TouchableOpacity
+              onPress={() => openModal(item)}
+              activeOpacity={0.87}
+            >
               <View style={styles.productCard}>
                 {item.imagem ? (
                   <Image
@@ -268,7 +319,7 @@ function ECommerceScreen() {
                   style={styles.deleteButton}
                   onPress={() => openDeleteModal(item)}
                 >
-                  <Text style={{ color: "#fff", fontWeight: "bold" }}>Excluir</Text>
+                  <Text style={{color:"#fff",fontWeight:"bold"}}>Excluir</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.addButton}
@@ -283,7 +334,7 @@ function ECommerceScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 70, alignItems: "center" }}
         ListEmptyComponent={
-          <Text style={{ textAlign: "center", color: "#aaa", marginTop: 14 }}>
+          <Text style={{textAlign:"center", color:"#aaa", marginTop:14}}>
             Nenhum produto cadastrado.
           </Text>
         }
@@ -296,7 +347,7 @@ function ECommerceScreen() {
         transparent
         onRequestClose={closeModal}
       >
-        <Pressable style={styles.modalBack} onPress={closeModal}>
+        <View style={styles.modalBack}>
           <View style={styles.modalCard}>
             {selectedProduct?.imagem && (
               <Image
@@ -304,8 +355,12 @@ function ECommerceScreen() {
                 style={styles.modalImage}
               />
             )}
-            <Text style={styles.modalName}>{selectedProduct?.nome}</Text>
-            <Text style={styles.modalDesc}>{selectedProduct?.descricao}</Text>
+            <Text style={styles.modalName}>
+              {selectedProduct?.nome}
+            </Text>
+            <Text style={styles.modalDesc}>
+              {selectedProduct?.descricao}
+            </Text>
             <Text style={styles.modalPrice}>
               {formatBRL(selectedProduct?.preco || 0)}
             </Text>
@@ -319,7 +374,7 @@ function ECommerceScreen() {
               style={styles.modalCloseButton}
               onPress={closeModal}
             >
-              <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Fechar</Text>
+              <Text style={{color:"#3182ce", fontWeight:"bold"}}>Fechar</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.modalDeleteButton}
@@ -328,12 +383,10 @@ function ECommerceScreen() {
                 openDeleteModal(selectedProduct);
               }}
             >
-              <Text style={{ color: "#d60000", fontWeight: "bold" }}>
-                Excluir Produto
-              </Text>
+              <Text style={{color:"#d60000", fontWeight:"bold"}}>Excluir Produto</Text>
             </TouchableOpacity>
           </View>
-        </Pressable>
+        </View>
       </Modal>
 
       {/* Modal Cadastro de Produto */}
@@ -382,9 +435,7 @@ function ECommerceScreen() {
                 style={styles.modalCloseButton}
                 onPress={closeRegisterModal}
               >
-                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>
-                  Cancelar
-                </Text>
+                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -399,28 +450,20 @@ function ECommerceScreen() {
         onRequestClose={closeDeleteModal}
       >
         <View style={styles.modalBack}>
-          <View style={[styles.cadastroCard, { maxWidth: 310 }]}>
+          <View style={[styles.cadastroCard, {maxWidth: 310}]}>
             <View style={styles.centerFields}>
-              <Text
-                style={{
-                  color: "#d60000",
-                  fontWeight: "bold",
-                  fontSize: 18,
-                  marginBottom: 16,
-                  alignSelf: "center",
-                }}
-              >
+              <Text style={{
+                color:"#d60000",
+                fontWeight: "bold",
+                fontSize: 18,
+                marginBottom: 16,
+                alignSelf: "center",
+              }}>
                 Excluir Produto
               </Text>
-              <Text
-                style={{
-                  fontSize: 16,
-                  textAlign: "center",
-                  marginBottom: 18,
-                }}
-              >
-                Tem certeza que deseja excluir o produto{" "}
-                <Text style={{ color: "#d60000", fontWeight: "bold" }}>
+              <Text style={{fontSize:16, textAlign:'center', marginBottom:18}}>
+                Tem certeza que deseja excluir o produto{' '}
+                <Text style={{color:"#d60000",fontWeight:'bold'}}>
                   {productToDelete?.nome}
                 </Text>
                 ?
@@ -429,17 +472,13 @@ function ECommerceScreen() {
                 style={styles.modalDeleteButton}
                 onPress={handleDeleteProduct}
               >
-                <Text style={{ color: "#fff", fontWeight: "bold" }}>
-                  Excluir
-                </Text>
+                <Text style={{color:"#fff", fontWeight:"bold"}}>Excluir</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={closeDeleteModal}
               >
-                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>
-                  Cancelar
-                </Text>
+                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
