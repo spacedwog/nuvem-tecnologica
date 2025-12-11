@@ -8,9 +8,10 @@ import {
   Image,
   Alert,
   Modal,
-  TextInput
+  TextInput,
 } from "react-native";
-import { Clipboard } from "react-native"; // <-- Usar Clipboard do próprio react-native.
+import { Clipboard } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -20,17 +21,16 @@ function formatBRL(value: number) {
   });
 }
 
-// Modal Pix corrigido: COPIAR SEM FECHAR
 function PixQRCodeModal({
   visible,
   onClose,
-  pixQr
+  pixQr,
 }: { visible: boolean; onClose: () => void; pixQr: string | null }) {
   const [copyStatus, setCopyStatus] = useState<string>("");
 
   async function handleCopyPix() {
     if (!pixQr) return;
-    Clipboard.setString(pixQr); // <-- react-native Clipboard
+    Clipboard.setString(pixQr);
     setCopyStatus("Copiado!");
     setTimeout(() => setCopyStatus(""), 1500);
   }
@@ -56,7 +56,7 @@ function PixQRCodeModal({
                   padding: 10,
                   borderRadius: 6,
                   minWidth: 240,
-                  textAlign: "center"
+                  textAlign: "center",
                 }}
               >
                 {pixQr}
@@ -68,7 +68,7 @@ function PixQRCodeModal({
                   paddingHorizontal: 22,
                   borderRadius: 8,
                   marginBottom: 5,
-                  alignSelf: "center"
+                  alignSelf: "center",
                 }}
                 onPress={handleCopyPix}
                 activeOpacity={0.82}
@@ -93,7 +93,7 @@ function PixQRCodeModal({
 
 function ECommerceScreen() {
   const [products, setProducts] = useState<any[]>([]);
-  const [cart, setCart] = useState<{id: string; qtd: number}[]>([]);
+  const [cart, setCart] = useState<{ id: string; qtd: number }[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -102,7 +102,7 @@ function ECommerceScreen() {
   const [formNome, setFormNome] = useState("");
   const [formDesc, setFormDesc] = useState("");
   const [formPreco, setFormPreco] = useState("");
-  const [formImagem, setFormImagem] = useState("");
+  const [formImagem, setFormImagem] = useState<string>("");
 
   // Modal exclusão
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -117,7 +117,7 @@ function ECommerceScreen() {
       const found = prev.find((item) => item.id === productId);
       if (found) {
         return prev.map((item) =>
-          item.id === productId ? {...item, qtd: item.qtd + 1} : item
+          item.id === productId ? { ...item, qtd: item.qtd + 1 } : item
         );
       } else {
         return [...prev, { id: productId, qtd: 1 }];
@@ -127,28 +127,29 @@ function ECommerceScreen() {
   }
 
   function removeFromCart(productId: string) {
-    setCart((prev) => prev
-      .map((item) => item.id === productId ? {...item, qtd: item.qtd - 1} : item)
-      .filter((item) => item.qtd > 0));
+    setCart((prev) =>
+      prev
+        .map((item) => (item.id === productId ? { ...item, qtd: item.qtd - 1 } : item))
+        .filter((item) => item.qtd > 0)
+    );
   }
 
   function clearCart() {
     setCart([]);
   }
 
-  // Gera o Pix ao finalizar compra
   async function handleCheckoutPix() {
     try {
       const totalValue = cart.reduce((sum, item) => {
-        const p = products.find(prod => prod.id === item.id);
+        const p = products.find((prod) => prod.id === item.id);
         return sum + ((p?.preco ?? 0) * item.qtd);
       }, 0);
-      const pixKey = "62904267000160"; // Troque para chave Pix real!
+      const pixKey = "62904267000160";
       const response = await fetch("https://nuvem-tecnologica.vercel.app/api/pix", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: 'initiate',
+          action: "initiate",
           amount: totalValue,
           key: pixKey,
           nome_fantasia: "E-Commerce",
@@ -188,7 +189,30 @@ function ECommerceScreen() {
 
   function closeRegisterModal() {
     setRegisterModalVisible(false);
-    setFormNome(""); setFormDesc(""); setFormPreco(""); setFormImagem("");
+    setFormNome("");
+    setFormDesc("");
+    setFormPreco("");
+    setFormImagem("");
+  }
+
+  async function handleChooseImage() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert(
+        "Permissão negada",
+        "Você precisa fornecer permissão para acessar a galeria."
+      );
+      return;
+    }
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.96,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setFormImagem(result.assets[0].uri);
+    }
   }
 
   function handleAddProduct() {
@@ -196,8 +220,8 @@ function ECommerceScreen() {
       Alert.alert("Campos obrigatórios", "Preencha nome e preço do produto.");
       return;
     }
-    const nextId = String(Number(products[products.length-1]?.id || 0) + 1);
-    setProducts(prev => [
+    const nextId = String(Number(products[products.length - 1]?.id || 0) + 1);
+    setProducts((prev) => [
       ...prev,
       {
         id: nextId,
@@ -205,7 +229,7 @@ function ECommerceScreen() {
         descricao: formDesc,
         preco: Number(formPreco),
         imagem: formImagem || undefined,
-      }
+      },
     ]);
     closeRegisterModal();
   }
@@ -222,26 +246,26 @@ function ECommerceScreen() {
 
   function handleDeleteProduct() {
     if (productToDelete) {
-      setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
-      setCart(prev => prev.filter(c => c.id !== productToDelete.id));
+      setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
+      setCart((prev) => prev.filter((c) => c.id !== productToDelete.id));
     }
     closeDeleteModal();
-    if(selectedProduct?.id === productToDelete?.id) closeModal();
+    if (selectedProduct?.id === productToDelete?.id) closeModal();
   }
 
-  const cartItems = cart.map(({id, qtd}) => {
+  const cartItems = cart.map(({ id, qtd }) => {
     const product = products.find((p) => p.id === id);
     return { ...product, qtd };
   });
-  const total = cartItems.reduce((sum, item) => sum + (item?.preco || 0) * (item.qtd || 0), 0);
+  const total = cartItems.reduce(
+    (sum, item) => sum + (item?.preco || 0) * (item.qtd || 0),
+    0
+  );
 
   const ListHeader = () => (
     <View style={styles.headerWrapper}>
       <Text style={styles.title}>E-Commerce</Text>
-      <TouchableOpacity
-        style={styles.cadastroButton}
-        onPress={openRegisterModal}
-      >
+      <TouchableOpacity style={styles.cadastroButton} onPress={openRegisterModal}>
         <Text style={styles.cadastroButtonText}>Cadastrar Produto</Text>
       </TouchableOpacity>
       <Text style={styles.subtitle}>Produtos</Text>
@@ -256,10 +280,7 @@ function ECommerceScreen() {
       ) : (
         <View style={styles.cartCard}>
           {cartItems.map((item) => (
-            <View
-              key={item.id}
-              style={styles.cartItem}
-            >
+            <View key={item.id} style={styles.cartItem}>
               <Text style={styles.cartItemText}>
                 {item.nome} x {item.qtd} = {formatBRL((item.preco ?? 0) * item.qtd)}
               </Text>
@@ -272,17 +293,11 @@ function ECommerceScreen() {
             </View>
           ))}
           <Text style={styles.totalLabel}>Total: {formatBRL(total)}</Text>
-          <TouchableOpacity
-            style={styles.checkoutButton}
-            onPress={handleCheckout}
-          >
-            <Text style={{color:"#fff", fontWeight:"bold"}}>Finalizar Compra</Text>
+          <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
+            <Text style={{ color: "#fff", fontWeight: "bold" }}>Finalizar Compra</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.clearCartButton}
-            onPress={clearCart}
-          >
-            <Text style={{color:"#3182ce", fontWeight:"bold"}}>Limpar Carrinho</Text>
+          <TouchableOpacity style={styles.clearCartButton} onPress={clearCart}>
+            <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Limpar Carrinho</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -297,18 +312,12 @@ function ECommerceScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
-        renderItem={({item}) => (
-          <View style={{alignItems: "center"}}>
-            <TouchableOpacity
-              onPress={() => openModal(item)}
-              activeOpacity={0.87}
-            >
+        renderItem={({ item }) => (
+          <View style={{ alignItems: "center" }}>
+            <TouchableOpacity onPress={() => openModal(item)} activeOpacity={0.87}>
               <View style={styles.productCard}>
                 {item.imagem ? (
-                  <Image
-                    source={{ uri: item.imagem }}
-                    style={styles.productImage}
-                  />
+                  <Image source={{ uri: item.imagem }} style={styles.productImage} />
                 ) : null}
                 <View style={{ flex: 1 }}>
                   <Text style={styles.productName}>{item.nome}</Text>
@@ -319,12 +328,9 @@ function ECommerceScreen() {
                   style={styles.deleteButton}
                   onPress={() => openDeleteModal(item)}
                 >
-                  <Text style={{color:"#fff",fontWeight:"bold"}}>Excluir</Text>
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>Excluir</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => addToCart(item.id)}
-                >
+                <TouchableOpacity style={styles.addButton} onPress={() => addToCart(item.id)}>
                   <Text style={styles.buttonText}>Adicionar</Text>
                 </TouchableOpacity>
               </View>
@@ -334,7 +340,7 @@ function ECommerceScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 70, alignItems: "center" }}
         ListEmptyComponent={
-          <Text style={{textAlign:"center", color:"#aaa", marginTop:14}}>
+          <Text style={{ textAlign: "center", color: "#aaa", marginTop: 14 }}>
             Nenhum produto cadastrado.
           </Text>
         }
@@ -350,31 +356,19 @@ function ECommerceScreen() {
         <View style={styles.modalBack}>
           <View style={styles.modalCard}>
             {selectedProduct?.imagem && (
-              <Image
-                source={{ uri: selectedProduct.imagem }}
-                style={styles.modalImage}
-              />
+              <Image source={{ uri: selectedProduct.imagem }} style={styles.modalImage} />
             )}
-            <Text style={styles.modalName}>
-              {selectedProduct?.nome}
-            </Text>
-            <Text style={styles.modalDesc}>
-              {selectedProduct?.descricao}
-            </Text>
-            <Text style={styles.modalPrice}>
-              {formatBRL(selectedProduct?.preco || 0)}
-            </Text>
+            <Text style={styles.modalName}>{selectedProduct?.nome}</Text>
+            <Text style={styles.modalDesc}>{selectedProduct?.descricao}</Text>
+            <Text style={styles.modalPrice}>{formatBRL(selectedProduct?.preco || 0)}</Text>
             <TouchableOpacity
               style={styles.modalAddButton}
               onPress={() => addToCart(selectedProduct.id)}
             >
               <Text style={styles.buttonText}>Adicionar ao Carrinho</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={closeModal}
-            >
-              <Text style={{color:"#3182ce", fontWeight:"bold"}}>Fechar</Text>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={closeModal}>
+              <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Fechar</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.modalDeleteButton}
@@ -383,7 +377,7 @@ function ECommerceScreen() {
                 openDeleteModal(selectedProduct);
               }}
             >
-              <Text style={{color:"#d60000", fontWeight:"bold"}}>Excluir Produto</Text>
+              <Text style={{ color: "#d60000", fontWeight: "bold" }}>Excluir Produto</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -419,23 +413,22 @@ function ECommerceScreen() {
                 onChangeText={setFormPreco}
                 keyboardType="numeric"
               />
-              <TextInput
-                style={styles.input}
-                placeholder="URL da Imagem"
-                value={formImagem}
-                onChangeText={setFormImagem}
-              />
-              <TouchableOpacity
-                style={styles.modalAddButton}
-                onPress={handleAddProduct}
-              >
+              <TouchableOpacity style={styles.chooseImageButton} onPress={handleChooseImage}>
+                <Text style={{ color: "#3182ce", fontWeight: "bold", fontSize: 15 }}>
+                  Escolher Imagem da Galeria
+                </Text>
+              </TouchableOpacity>
+              {formImagem ? (
+                <Image
+                  source={{ uri: formImagem }}
+                  style={{ width: 80, height: 80, marginTop: 8, borderRadius: 8 }}
+                />
+              ) : null}
+              <TouchableOpacity style={styles.modalAddButton} onPress={handleAddProduct}>
                 <Text style={styles.buttonText}>Adicionar Produto</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeRegisterModal}
-              >
-                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={closeRegisterModal}>
+                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -450,35 +443,31 @@ function ECommerceScreen() {
         onRequestClose={closeDeleteModal}
       >
         <View style={styles.modalBack}>
-          <View style={[styles.cadastroCard, {maxWidth: 310}]}>
+          <View style={[styles.cadastroCard, { maxWidth: 310 }]}>
             <View style={styles.centerFields}>
-              <Text style={{
-                color:"#d60000",
-                fontWeight: "bold",
-                fontSize: 18,
-                marginBottom: 16,
-                alignSelf: "center",
-              }}>
+              <Text
+                style={{
+                  color: "#d60000",
+                  fontWeight: "bold",
+                  fontSize: 18,
+                  marginBottom: 16,
+                  alignSelf: "center",
+                }}
+              >
                 Excluir Produto
               </Text>
-              <Text style={{fontSize:16, textAlign:'center', marginBottom:18}}>
-                Tem certeza que deseja excluir o produto{' '}
-                <Text style={{color:"#d60000",fontWeight:'bold'}}>
+              <Text style={{ fontSize: 16, textAlign: "center", marginBottom: 18 }}>
+                Tem certeza que deseja excluir o produto{" "}
+                <Text style={{ color: "#d60000", fontWeight: "bold" }}>
                   {productToDelete?.nome}
                 </Text>
                 ?
               </Text>
-              <TouchableOpacity
-                style={styles.modalDeleteButton}
-                onPress={handleDeleteProduct}
-              >
-                <Text style={{color:"#fff", fontWeight:"bold"}}>Excluir</Text>
+              <TouchableOpacity style={styles.modalDeleteButton} onPress={handleDeleteProduct}>
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>Excluir</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={closeDeleteModal}
-              >
-                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={closeDeleteModal}>
+                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -515,7 +504,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  title: { fontSize: 22, fontWeight: "bold", marginBottom: 19, color: "#3182ce", textAlign: "center" },
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 19,
+    color: "#3182ce",
+    textAlign: "center",
+  },
   cadastroButton: {
     backgroundColor: "#23578a",
     borderRadius: 9,
@@ -530,7 +525,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   subtitle: {
-    fontSize: 18, fontWeight: "bold", marginTop: 6, marginBottom: 8, color: "#23578a", textAlign: "center"
+    fontSize: 18,
+    fontWeight: "bold",
+    marginTop: 6,
+    marginBottom: 8,
+    color: "#23578a",
+    textAlign: "center",
   },
   productCard: {
     flexDirection: "row",
@@ -545,14 +545,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.09,
     shadowRadius: 3,
     elevation: 2,
-    alignSelf: "center"
+    alignSelf: "center",
   },
   productImage: {
-    width: 48, height: 48, marginRight: 15, resizeMode: "contain"
+    width: 48,
+    height: 48,
+    marginRight: 15,
+    resizeMode: "contain",
   },
-  productName: { fontWeight: "bold", fontSize: 16, color: "#23292e", textAlign: "left" },
-  productDesc: { color: "#5a6d8a", fontSize: 14, marginBottom: 7, flexWrap: "wrap" },
-  productPrice: { fontWeight: "bold", color: "#3182ce", marginBottom: 5 },
+  productName: {
+    fontWeight: "bold",
+    fontSize: 16,
+    color: "#23292e",
+    textAlign: "left",
+  },
+  productDesc: {
+    color: "#5a6d8a",
+    fontSize: 14,
+    marginBottom: 7,
+    flexWrap: "wrap",
+  },
+  productPrice: {
+    fontWeight: "bold",
+    color: "#3182ce",
+    marginBottom: 5,
+  },
   addButton: {
     backgroundColor: "#3182ce",
     borderRadius: 8,
@@ -570,7 +587,7 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     marginLeft: 5,
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
   },
   cartCard: {
     width: 330,
@@ -581,12 +598,15 @@ const styles = StyleSheet.create({
     elevation: 4,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.1,
     shadowRadius: 5,
     alignSelf: "center",
   },
   cartItem: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
   },
   cartItemText: { color: "#23292e", fontSize: 15 },
   removeButton: {
@@ -596,7 +616,14 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginLeft: 8,
   },
-  totalLabel: { color: "#23578a", fontWeight: "bold", fontSize: 16, marginTop: 10, marginBottom: 7, textAlign: "center" },
+  totalLabel: {
+    color: "#23578a",
+    fontWeight: "bold",
+    fontSize: 16,
+    marginTop: 10,
+    marginBottom: 7,
+    textAlign: "center",
+  },
   checkoutButton: {
     backgroundColor: "#3182ce",
     paddingVertical: 12,
@@ -616,7 +643,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
     fontSize: 16,
-    textAlign: "center"
+    textAlign: "center",
   },
   input: {
     width: "90%",
@@ -629,7 +656,17 @@ const styles = StyleSheet.create({
     fontSize: 17,
     marginBottom: 10,
     backgroundColor: "#fff",
-    textAlign: "center"
+    textAlign: "center",
+  },
+  chooseImageButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    marginVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#3182ce",
+    backgroundColor: "#fafdff",
+    alignItems: "center",
   },
   modalBack: {
     flex: 1,
