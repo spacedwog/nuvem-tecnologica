@@ -11,6 +11,12 @@ import {
   Pressable,
   TextInput
 } from "react-native";
+import {
+  GooglePay,
+  AllowedCardNetworkType,
+  AllowedCardAuthMethodsType,
+  tokenizationSpecificationType
+} from "react-native-google-pay";
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -42,18 +48,18 @@ function ECommerceScreen() {
       const found = prev.find((item) => item.id === productId);
       if (found) {
         return prev.map((item) =>
-          item.id === productId ? {...item, qtd: item.qtd + 1} : item
+          item.id === productId ? { ...item, qtd: item.qtd + 1 } : item
         );
       } else {
         return [...prev, { id: productId, qtd: 1 }];
       }
     });
-    setModalVisible(false); // Fecha modal ao adicionar
+    setModalVisible(false);
   }
 
   function removeFromCart(productId: string) {
     setCart((prev) => prev
-      .map((item) => item.id === productId ? {...item, qtd: item.qtd - 1} : item)
+      .map((item) => item.id === productId ? { ...item, qtd: item.qtd - 1 } : item)
       .filter((item) => item.qtd > 0));
   }
 
@@ -64,6 +70,53 @@ function ECommerceScreen() {
   function handleCheckout() {
     Alert.alert("Pedido confirmado!", "Compra realizada com sucesso!");
     clearCart();
+  }
+
+  /** Google Pay Integration (corrigida tipagem para TypeScript) */
+  function handleCheckoutGooglePay() {
+    const allowedCardNetworks: AllowedCardNetworkType[] = [
+      "VISA",
+      "MASTERCARD"
+    ];
+    const allowedCardAuthMethods: AllowedCardAuthMethodsType[] = [
+      "PAN_ONLY",
+      "CRYPTOGRAM_3DS"
+    ];
+
+    const totalAmount = total.toFixed(2);
+
+    const requestData = {
+      cardPaymentMethod: {
+        tokenizationSpecification: {
+          type: "PAYMENT_GATEWAY" as tokenizationSpecificationType, // CORREÇÃO
+          gateway: "stripe", // Troque para seu gateway real
+          gatewayMerchantId: "exampleMerchantId"
+        },
+        allowedCardNetworks,
+        allowedCardAuthMethods,
+      },
+      transaction: {
+        totalPrice: totalAmount,
+        totalPriceStatus: "FINAL",
+        currencyCode: "BRL",
+      },
+      merchantName: "Sua Loja",
+    };
+
+    GooglePay.setEnvironment(GooglePay.ENVIRONMENT_TEST);
+
+    GooglePay.isReadyToPay(allowedCardNetworks, allowedCardAuthMethods).then(function (ready) {
+      if (ready) {
+        GooglePay.requestPayment(requestData)
+          .then(token => {
+            Alert.alert("Pagamento realizado!", "Compra com Google Pay foi aprovada.");
+            clearCart();
+          })
+          .catch(error => Alert.alert("Erro Google Pay", error.message));
+      } else {
+        Alert.alert("Google Pay não está disponível");
+      }
+    });
   }
 
   function openModal(product: any) {
@@ -90,7 +143,7 @@ function ECommerceScreen() {
       Alert.alert("Campos obrigatórios", "Preencha nome e preço do produto.");
       return;
     }
-    const nextId = String(Number(products[products.length-1]?.id || 0) + 1);
+    const nextId = String(Number(products[products.length - 1]?.id || 0) + 1);
     setProducts(prev => [
       ...prev,
       {
@@ -104,7 +157,6 @@ function ECommerceScreen() {
     closeRegisterModal();
   }
 
-  // Modal exclusão
   function openDeleteModal(product: any) {
     setProductToDelete(product);
     setDeleteModalVisible(true);
@@ -121,16 +173,15 @@ function ECommerceScreen() {
       setCart(prev => prev.filter(c => c.id !== productToDelete.id));
     }
     closeDeleteModal();
-    if(selectedProduct?.id === productToDelete?.id) closeModal();
+    if (selectedProduct?.id === productToDelete?.id) closeModal();
   }
 
-  const cartItems = cart.map(({id, qtd}) => {
+  const cartItems = cart.map(({ id, qtd }) => {
     const product = products.find((p) => p.id === id);
     return { ...product, qtd };
   });
   const total = cartItems.reduce((sum, item) => sum + (item?.preco || 0) * (item.qtd || 0), 0);
 
-  // <<<<< MAIN HEADER CENTRALIZED >>>>>
   const ListHeader = () => (
     <View style={styles.headerWrapper}>
       <Text style={styles.title}>E-Commerce</Text>
@@ -168,17 +219,25 @@ function ECommerceScreen() {
             </View>
           ))}
           <Text style={styles.totalLabel}>Total: {formatBRL(total)}</Text>
+          {/* Botão Checkout padrão */}
           <TouchableOpacity
             style={styles.checkoutButton}
             onPress={handleCheckout}
           >
-            <Text style={{color:"#fff", fontWeight:"bold"}}>Finalizar Compra</Text>
+            <Text style={{ color: "#fff", fontWeight: "bold" }}>Finalizar Compra</Text>
+          </TouchableOpacity>
+          {/* Botão Google Pay */}
+          <TouchableOpacity
+            style={[styles.checkoutButton, { backgroundColor: "#0c9d59" }]}
+            onPress={handleCheckoutGooglePay}
+          >
+            <Text style={{ color: "#fff", fontWeight: "bold" }}>Pagar com Google Pay</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.clearCartButton}
             onPress={clearCart}
           >
-            <Text style={{color:"#3182ce", fontWeight:"bold"}}>Limpar Carrinho</Text>
+            <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Limpar Carrinho</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -192,8 +251,8 @@ function ECommerceScreen() {
         keyExtractor={(item) => item.id}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
-        renderItem={({item}) => (
-          <View style={{alignItems: "center"}}>
+        renderItem={({ item }) => (
+          <View style={{ alignItems: "center" }}>
             <TouchableOpacity
               onPress={() => openModal(item)}
               activeOpacity={0.87}
@@ -214,7 +273,7 @@ function ECommerceScreen() {
                   style={styles.deleteButton}
                   onPress={() => openDeleteModal(item)}
                 >
-                  <Text style={{color:"#fff",fontWeight:"bold"}}>Excluir</Text>
+                  <Text style={{ color: "#fff", fontWeight: "bold" }}>Excluir</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.addButton}
@@ -229,7 +288,7 @@ function ECommerceScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 70, alignItems: "center" }}
         ListEmptyComponent={
-          <Text style={{textAlign:"center", color:"#aaa", marginTop:14}}>
+          <Text style={{ textAlign: "center", color: "#aaa", marginTop: 14 }}>
             Nenhum produto cadastrado.
           </Text>
         }
@@ -269,7 +328,7 @@ function ECommerceScreen() {
               style={styles.modalCloseButton}
               onPress={closeModal}
             >
-              <Text style={{color:"#3182ce", fontWeight:"bold"}}>Fechar</Text>
+              <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Fechar</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.modalDeleteButton}
@@ -278,7 +337,7 @@ function ECommerceScreen() {
                 openDeleteModal(selectedProduct);
               }}
             >
-              <Text style={{color:"#d60000", fontWeight:"bold"}}>Excluir Produto</Text>
+              <Text style={{ color: "#d60000", fontWeight: "bold" }}>Excluir Produto</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -330,7 +389,7 @@ function ECommerceScreen() {
                 style={styles.modalCloseButton}
                 onPress={closeRegisterModal}
               >
-                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
+                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -345,10 +404,10 @@ function ECommerceScreen() {
         onRequestClose={closeDeleteModal}
       >
         <View style={styles.modalBack}>
-          <View style={[styles.cadastroCard, {maxWidth: 310}]}>
+          <View style={[styles.cadastroCard, { maxWidth: 310 }]}>
             <View style={styles.centerFields}>
               <Text style={{
-                color:"#d60000",
+                color: "#d60000",
                 fontWeight: "bold",
                 fontSize: 18,
                 marginBottom: 16,
@@ -356,9 +415,9 @@ function ECommerceScreen() {
               }}>
                 Excluir Produto
               </Text>
-              <Text style={{fontSize:16, textAlign:'center', marginBottom:18}}>
+              <Text style={{ fontSize: 16, textAlign: 'center', marginBottom: 18 }}>
                 Tem certeza que deseja excluir o produto{' '}
-                <Text style={{color:"#d60000",fontWeight:'bold'}}>
+                <Text style={{ color: "#d60000", fontWeight: 'bold' }}>
                   {productToDelete?.nome}
                 </Text>
                 ?
@@ -367,13 +426,13 @@ function ECommerceScreen() {
                 style={styles.modalDeleteButton}
                 onPress={handleDeleteProduct}
               >
-                <Text style={{color:"#fff", fontWeight:"bold"}}>Excluir</Text>
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>Excluir</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={closeDeleteModal}
               >
-                <Text style={{color:"#3182ce", fontWeight:"bold"}}>Cancelar</Text>
+                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Cancelar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -385,20 +444,19 @@ function ECommerceScreen() {
 
 export default ECommerceScreen;
 
-// <<<<< CENTRALIZE O HEADER >>>>>
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center", // centraliza verticalmente
-    alignItems: "center",     // centraliza horizontalmente
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: "#f5f9fe",
     padding: 19,
   },
   headerWrapper: {
-    justifyContent: "center", // ADICIONADO PARA CENTRALIZAR VERTICALMENTE
-    alignItems: "center",     // já estava para centralizar horizontalmente
+    justifyContent: "center",
+    alignItems: "center",
     paddingBottom: 8,
-    paddingTop: 70,           // Adiciona um espaço para não grudar no topo
+    paddingTop: 70,
     backgroundColor: "#f5f9fe",
     width: "100%",
   },
@@ -426,7 +484,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   subtitle: {
-    fontSize: 18, fontWeight: "bold", marginTop: 6, marginBottom: 8, color: "#23578a", textAlign:"center"
+    fontSize: 18, fontWeight: "bold", marginTop: 6, marginBottom: 8, color: "#23578a", textAlign: "center"
   },
   productCard: {
     flexDirection: "row",
@@ -446,7 +504,7 @@ const styles = StyleSheet.create({
   productImage: {
     width: 48, height: 48, marginRight: 15, resizeMode: "contain"
   },
-  productName: { fontWeight: "bold", fontSize: 16, color: "#23292e", textAlign:"left" },
+  productName: { fontWeight: "bold", fontSize: 16, color: "#23292e", textAlign: "left" },
   productDesc: { color: "#5a6d8a", fontSize: 14, marginBottom: 7, flexWrap: "wrap" },
   productPrice: { fontWeight: "bold", color: "#3182ce", marginBottom: 5 },
   addButton: {
@@ -492,7 +550,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginLeft: 8,
   },
-  totalLabel: { color: "#23578a", fontWeight: "bold", fontSize: 16, marginTop: 10, marginBottom: 7, textAlign:"center" },
+  totalLabel: { color: "#23578a", fontWeight: "bold", fontSize: 16, marginTop: 10, marginBottom: 7, textAlign: "center" },
   checkoutButton: {
     backgroundColor: "#3182ce",
     paddingVertical: 12,
@@ -527,7 +585,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     textAlign: "center"
   },
-  // MODAL
   modalBack: {
     flex: 1,
     backgroundColor: "rgba(30,47,72,0.18)",
