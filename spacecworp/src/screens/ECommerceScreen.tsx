@@ -11,12 +11,7 @@ import {
   Pressable,
   TextInput
 } from "react-native";
-import {
-  GooglePay,
-  AllowedCardNetworkType,
-  AllowedCardAuthMethodsType,
-  tokenizationSpecificationType
-} from "react-native-google-pay";
+import { PaymentSheet, initPaymentSheet, presentPaymentSheet } from "@stripe/stripe-react-native";
 
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", {
@@ -28,7 +23,7 @@ function formatBRL(value: number) {
 
 function ECommerceScreen() {
   const [products, setProducts] = useState<any[]>([]);
-  const [cart, setCart] = useState<{id: string; qtd: number}[]>([]);
+  const [cart, setCart] = useState<{ id: string; qtd: number }[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -58,9 +53,13 @@ function ECommerceScreen() {
   }
 
   function removeFromCart(productId: string) {
-    setCart((prev) => prev
-      .map((item) => item.id === productId ? { ...item, qtd: item.qtd - 1 } : item)
-      .filter((item) => item.qtd > 0));
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.id === productId ? { ...item, qtd: item.qtd - 1 } : item
+        )
+        .filter((item) => item.qtd > 0)
+    );
   }
 
   function clearCart() {
@@ -72,51 +71,57 @@ function ECommerceScreen() {
     clearCart();
   }
 
-  /** Google Pay Integration (corrigida tipagem para TypeScript) */
-  function handleCheckoutGooglePay() {
-    const allowedCardNetworks: AllowedCardNetworkType[] = [
-      "VISA",
-      "MASTERCARD"
-    ];
-    const allowedCardAuthMethods: AllowedCardAuthMethodsType[] = [
-      "PAN_ONLY",
-      "CRYPTOGRAM_3DS"
-    ];
-
-    const totalAmount = total.toFixed(2);
-
-    const requestData = {
-      cardPaymentMethod: {
-        tokenizationSpecification: {
-          type: "PAYMENT_GATEWAY" as tokenizationSpecificationType, // CORREÇÃO
-          gateway: "stripe", // Troque para seu gateway real
-          gatewayMerchantId: "exampleMerchantId"
+  /**
+   * Stripe PaymentSheet integration
+   * O backend de exemplo está incluído abaixo!
+   */
+  async function handleCheckoutStripe() {
+    const totalAmount = Math.round(
+      cart.reduce(
+        (sum, cartItem) => {
+          const product = products.find((p) => p.id === cartItem.id);
+          return sum + ((product?.preco || 0) * cartItem.qtd);
         },
-        allowedCardNetworks,
-        allowedCardAuthMethods,
-      },
-      transaction: {
-        totalPrice: totalAmount,
-        totalPriceStatus: "FINAL",
-        currencyCode: "BRL",
-      },
-      merchantName: "Sua Loja",
-    };
+        0
+      ) * 100
+    );
 
-    GooglePay.setEnvironment(GooglePay.ENVIRONMENT_TEST);
-
-    GooglePay.isReadyToPay(allowedCardNetworks, allowedCardAuthMethods).then(function (ready) {
-      if (ready) {
-        GooglePay.requestPayment(requestData)
-          .then(token => {
-            Alert.alert("Pagamento realizado!", "Compra com Google Pay foi aprovada.");
-            clearCart();
-          })
-          .catch(error => Alert.alert("Erro Google Pay", error.message));
-      } else {
-        Alert.alert("Google Pay não está disponível");
-      }
+    // Chama o backend para gerar o PaymentIntent e fornecer informações!
+    const response = await fetch("http://localhost:4242/payment-sheet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: totalAmount,
+        currency: "brl",
+      }),
     });
+    const { paymentIntent, ephemeralKey, customer } = await response.json();
+
+    const { error: initError } = await initPaymentSheet({
+      merchantDisplayName: "Sua Loja",
+      paymentIntentClientSecret: paymentIntent,
+      customerEphemeralKeySecret: ephemeralKey,
+      customerId: customer,
+      applePay: { merchantCountryCode: "BR" },
+      googlePay: {
+        merchantCountryCode: ""
+      },
+      style: "automatic",
+    });
+
+    if (initError) {
+      Alert.alert("Erro ao inicializar PaymentSheet", initError.message);
+      return;
+    }
+
+    const { error: presentError } = await presentPaymentSheet();
+
+    if (presentError) {
+      Alert.alert("Pagamento falhou", presentError.message);
+    } else {
+      Alert.alert("Pagamento realizado!", "Compra via Stripe realizada com sucesso.");
+      clearCart();
+    }
   }
 
   function openModal(product: any) {
@@ -144,7 +149,7 @@ function ECommerceScreen() {
       return;
     }
     const nextId = String(Number(products[products.length - 1]?.id || 0) + 1);
-    setProducts(prev => [
+    setProducts((prev) => [
       ...prev,
       {
         id: nextId,
@@ -152,7 +157,7 @@ function ECommerceScreen() {
         descricao: formDesc,
         preco: Number(formPreco),
         imagem: formImagem || undefined,
-      }
+      },
     ]);
     closeRegisterModal();
   }
@@ -169,8 +174,8 @@ function ECommerceScreen() {
 
   function handleDeleteProduct() {
     if (productToDelete) {
-      setProducts(prev => prev.filter(p => p.id !== productToDelete.id));
-      setCart(prev => prev.filter(c => c.id !== productToDelete.id));
+      setProducts((prev) => prev.filter((p) => p.id !== productToDelete.id));
+      setCart((prev) => prev.filter((c) => c.id !== productToDelete.id));
     }
     closeDeleteModal();
     if (selectedProduct?.id === productToDelete?.id) closeModal();
@@ -180,15 +185,15 @@ function ECommerceScreen() {
     const product = products.find((p) => p.id === id);
     return { ...product, qtd };
   });
-  const total = cartItems.reduce((sum, item) => sum + (item?.preco || 0) * (item.qtd || 0), 0);
+  const total = cartItems.reduce(
+    (sum, item) => sum + (item?.preco || 0) * (item.qtd || 0),
+    0
+  );
 
   const ListHeader = () => (
     <View style={styles.headerWrapper}>
       <Text style={styles.title}>E-Commerce</Text>
-      <TouchableOpacity
-        style={styles.cadastroButton}
-        onPress={openRegisterModal}
-      >
+      <TouchableOpacity style={styles.cadastroButton} onPress={openRegisterModal}>
         <Text style={styles.cadastroButtonText}>Cadastrar Produto</Text>
       </TouchableOpacity>
       <Text style={styles.subtitle}>Produtos</Text>
@@ -203,10 +208,7 @@ function ECommerceScreen() {
       ) : (
         <View style={styles.cartCard}>
           {cartItems.map((item) => (
-            <View
-              key={item.id}
-              style={styles.cartItem}
-            >
+            <View key={item.id} style={styles.cartItem}>
               <Text style={styles.cartItemText}>
                 {item.nome} x {item.qtd} = {formatBRL((item.preco ?? 0) * item.qtd)}
               </Text>
@@ -220,23 +222,19 @@ function ECommerceScreen() {
           ))}
           <Text style={styles.totalLabel}>Total: {formatBRL(total)}</Text>
           {/* Botão Checkout padrão */}
-          <TouchableOpacity
-            style={styles.checkoutButton}
-            onPress={handleCheckout}
-          >
+          <TouchableOpacity style={styles.checkoutButton} onPress={handleCheckout}>
             <Text style={{ color: "#fff", fontWeight: "bold" }}>Finalizar Compra</Text>
           </TouchableOpacity>
-          {/* Botão Google Pay */}
+          {/* Botão Stripe PaymentSheet (Google Pay/Apple Pay) */}
           <TouchableOpacity
-            style={[styles.checkoutButton, { backgroundColor: "#0c9d59" }]}
-            onPress={handleCheckoutGooglePay}
+            style={[styles.checkoutButton, { backgroundColor: "#635bff" }]}
+            onPress={handleCheckoutStripe}
           >
-            <Text style={{ color: "#fff", fontWeight: "bold" }}>Pagar com Google Pay</Text>
+            <Text style={{ color: "#fff", fontWeight: "bold" }}>
+              Pagar com Google Pay / Apple Pay
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.clearCartButton}
-            onPress={clearCart}
-          >
+          <TouchableOpacity style={styles.clearCartButton} onPress={clearCart}>
             <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Limpar Carrinho</Text>
           </TouchableOpacity>
         </View>
@@ -253,10 +251,7 @@ function ECommerceScreen() {
         ListFooterComponent={ListFooter}
         renderItem={({ item }) => (
           <View style={{ alignItems: "center" }}>
-            <TouchableOpacity
-              onPress={() => openModal(item)}
-              activeOpacity={0.87}
-            >
+            <TouchableOpacity onPress={() => openModal(item)} activeOpacity={0.87}>
               <View style={styles.productCard}>
                 {item.imagem ? (
                   <Image
@@ -309,12 +304,8 @@ function ECommerceScreen() {
                 style={styles.modalImage}
               />
             )}
-            <Text style={styles.modalName}>
-              {selectedProduct?.nome}
-            </Text>
-            <Text style={styles.modalDesc}>
-              {selectedProduct?.descricao}
-            </Text>
+            <Text style={styles.modalName}>{selectedProduct?.nome}</Text>
+            <Text style={styles.modalDesc}>{selectedProduct?.descricao}</Text>
             <Text style={styles.modalPrice}>
               {formatBRL(selectedProduct?.preco || 0)}
             </Text>
@@ -337,7 +328,9 @@ function ECommerceScreen() {
                 openDeleteModal(selectedProduct);
               }}
             >
-              <Text style={{ color: "#d60000", fontWeight: "bold" }}>Excluir Produto</Text>
+              <Text style={{ color: "#d60000", fontWeight: "bold" }}>
+                Excluir Produto
+              </Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -389,7 +382,9 @@ function ECommerceScreen() {
                 style={styles.modalCloseButton}
                 onPress={closeRegisterModal}
               >
-                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Cancelar</Text>
+                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>
+                  Cancelar
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -406,18 +401,26 @@ function ECommerceScreen() {
         <View style={styles.modalBack}>
           <View style={[styles.cadastroCard, { maxWidth: 310 }]}>
             <View style={styles.centerFields}>
-              <Text style={{
-                color: "#d60000",
-                fontWeight: "bold",
-                fontSize: 18,
-                marginBottom: 16,
-                alignSelf: "center",
-              }}>
+              <Text
+                style={{
+                  color: "#d60000",
+                  fontWeight: "bold",
+                  fontSize: 18,
+                  marginBottom: 16,
+                  alignSelf: "center",
+                }}
+              >
                 Excluir Produto
               </Text>
-              <Text style={{ fontSize: 16, textAlign: 'center', marginBottom: 18 }}>
-                Tem certeza que deseja excluir o produto{' '}
-                <Text style={{ color: "#d60000", fontWeight: 'bold' }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  textAlign: "center",
+                  marginBottom: 18,
+                }}
+              >
+                Tem certeza que deseja excluir o produto{" "}
+                <Text style={{ color: "#d60000", fontWeight: "bold" }}>
                   {productToDelete?.nome}
                 </Text>
                 ?
@@ -426,13 +429,17 @@ function ECommerceScreen() {
                 style={styles.modalDeleteButton}
                 onPress={handleDeleteProduct}
               >
-                <Text style={{ color: "#fff", fontWeight: "bold" }}>Excluir</Text>
+                <Text style={{ color: "#fff", fontWeight: "bold" }}>
+                  Excluir
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={closeDeleteModal}
               >
-                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>Cancelar</Text>
+                <Text style={{ color: "#3182ce", fontWeight: "bold" }}>
+                  Cancelar
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
