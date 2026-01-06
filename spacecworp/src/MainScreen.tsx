@@ -24,13 +24,12 @@ import { LogEntry } from './domain/LogEntry';
 import { StatusESP } from './domain/StatusESP';
 import { ConsultaCNPJService } from './services/ConsultaCNPJService';
 import { ESP32Service } from './services/ESP32Service';
-
-// Telas extras para navegação
+import { ZoweService } from './services/ZoweService';
+import ZoweLoginArea from './ZoweLoginArea';
 import ConsultaCNPJScreen from './screens/ConsultaCNPJScreen';
 import ECommerceScreen from './screens/ECommerceScreen';
 import TabBar from './components/TabBar';
 
-// -------------------- PIX/Log helpers --------------------
 const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
 const AUDIT_LOG_API = "https://nuvem-tecnologica.vercel.app/api/audit-log";
 function formatPixValue(input: string): string {
@@ -117,9 +116,7 @@ async function confirmarPix(id: string) {
   return res.json();
 }
 
-// -------------------- COMPONENT --------------------
 export default function MainScreen() {
-  // -------------------- Navegação --------------------
   const routes = [
     { key: 'home', title: 'Home' },
     { key: 'empresas', title: 'Empresas' },
@@ -127,7 +124,6 @@ export default function MainScreen() {
   ];
   const [activeScreen, setActiveScreen] = useState(0);
 
-  // -------------------- Estados tela Home --------------
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [cnpj, setCnpj] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -145,13 +141,17 @@ export default function MainScreen() {
   const [textToSend, setTextToSend] = useState<string>('');
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
-  // PIX e auditoria
   const [pixQr, setPixQr] = useState<string | null>(null);
   const [pixId, setPixId] = useState<string | null>(null);
   const [pixStatus, setPixStatus] = useState<string | null>(null);
   const [pixAmountText, setPixAmountText] = useState<string>('');
   const [pixDesc, setPixDesc] = useState<string>("");
   const [pixAuditLog, setPixAuditLog] = useState<PixAudit[]>([]);
+
+  const [zoweToken, setZoweToken] = useState<string | null>(null);
+  const [zoweDatasets, setZoweDatasets] = useState<string[]>([]);
+  const [zoweLoading, setZoweLoading] = useState(false);
+  const [zoweError, setZoweError] = useState<string | null>(null);
 
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
@@ -176,17 +176,17 @@ export default function MainScreen() {
         setStatus(null);
         setLog([]);
         setEmpresa(null);
+        setZoweToken(null);
+        setZoweDatasets([]);
       } }
     ]);
   }
-
   function handleChangeCNPJ(text: string) {
     setErrorMsg(null);
     setSuccessMsg(null);
     setCnpj(Empresa.maskCNPJ(text));
     setEmpresa(null);
   }
-
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -210,7 +210,6 @@ export default function MainScreen() {
       setIsLoading(false);
     }
   }
-
   function openModalPage(page = 0) {
     setModalPage(page);
     setModalCnpjVisible(true);
@@ -261,7 +260,6 @@ export default function MainScreen() {
     }
     setRefreshing(false);
   }
-
   async function handleConnect() {
     setLog((prev) => [...prev, new LogEntry("Conectando ao ESP32-CAM...", "info")]);
     try {
@@ -274,7 +272,6 @@ export default function MainScreen() {
       setLog((prev) => [...prev, new LogEntry(e.message, "error")]);
     }
   }
-
   async function handleSendData(cmd?: string) {
     if (!isConnected) {
       setLog((prev) => [...prev, new LogEntry("Não está conectado ao ESP32-CAM.", "error")]);
@@ -292,13 +289,11 @@ export default function MainScreen() {
       if (cmd === undefined) setTextToSend('');
     }
   }
-
   async function handleDisconnect() {
     setIsConnected(false);
     setStatus(null);
     setLog((prev) => [...prev, new LogEntry("Desconectado manualmente.", "closed")]);
   }
-
   async function handleSendCompanyToVespa() {
     if (!isConnected) {
       setLog((prev) => [...prev, new LogEntry("Conecte-se ao ESP32-CAM para enviar dados.", "error")]);
@@ -315,7 +310,6 @@ export default function MainScreen() {
       setLog((prev) => [...prev, new LogEntry("Falha ao enviar dados: " + (e.message || e), "error")]);
     }
   }
-
   function addPixAudit(event: string, details: Record<string, any> = {}) {
     const item: PixAudit = {
       event,
@@ -326,7 +320,6 @@ export default function MainScreen() {
     setPixAuditLog(prev => [...prev, item]);
     logPixAudit(event, details, empresa);
   }
-
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
@@ -392,7 +385,6 @@ export default function MainScreen() {
       setIsLoading(false);
     }
   }
-
   async function handleStatusPix() {
     try {
       if (!pixId) return;
@@ -408,7 +400,6 @@ export default function MainScreen() {
       addPixAudit('pix_error', { motivo: e.message });
     }
   }
-
   async function handleConfirmPix() {
     try {
       if (!pixId) return;
@@ -424,7 +415,20 @@ export default function MainScreen() {
       addPixAudit('pix_error', { motivo: e.message });
     }
   }
-
+  async function handleListZoweDatasets() {
+    if (!zoweToken) return;
+    setZoweLoading(true);
+    setZoweError(null);
+    try {
+      const datasets = await ZoweService.listarDatasets(zoweToken);
+      setZoweDatasets(datasets);
+    } catch (e: any) {
+      setZoweError("Erro ao listar datasets: " + e.message);
+      setZoweDatasets([]);
+    } finally {
+      setZoweLoading(false);
+    }
+  }
   const MODAL_PAGES = [
     "empresa",
     "enderecos",
@@ -542,10 +546,8 @@ export default function MainScreen() {
     ];
   }
 
-  // =============== Render navegação: ===================
   let RenderedScreen = null;
   if (activeScreen === 0) {
-    // ---------- TELA HOME/PRINCIPAL ----------
     if (!isLoggedIn) {
       RenderedScreen = (
         <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -609,9 +611,32 @@ export default function MainScreen() {
       );
     } else {
       const modalPagesData = getModalPagesData(empresa);
-
       RenderedScreen = (
         <View style={styles.container}>
+          <View style={{ width: "100%", padding: 7, backgroundColor: "#f4fafd", borderRadius: 7, borderWidth: 1, borderColor: "#d2e2f1", marginVertical: 12 }}>
+            <Text style={{ fontWeight: "bold", fontSize: 17, color: "#214089", marginBottom: 5 }}>Zowe Explorer</Text>
+            <ZoweLoginArea onConnect={setZoweToken} />
+            {zoweToken && (
+              <View style={{ marginVertical: 7 }}>
+                <TouchableOpacity
+                  style={styles.sendButton}
+                  onPress={handleListZoweDatasets}
+                  disabled={zoweLoading}
+                >
+                  <Text style={styles.sendButtonText}>
+                    {zoweLoading ? "Buscando..." : "Listar Datasets"}
+                  </Text>
+                </TouchableOpacity>
+                {zoweError && <Text style={{ color: "red", marginTop: 6 }}>{zoweError}</Text>}
+                <ScrollView style={{ maxHeight: 140, marginTop: 8 }}>
+                  {zoweDatasets.length === 0 && <Text style={{ color: "#76789c" }}>Nenhum dataset listado.</Text>}
+                  {zoweDatasets.map((ds, idx) => (
+                    <Text key={idx} style={{ color: "#203d7a" }}>• {ds}</Text>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
           <ScrollView
             contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}
             refreshControl={
@@ -682,7 +707,6 @@ export default function MainScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-
             {empresa?.dados && isConnected && (
               <TouchableOpacity
                 style={{
@@ -701,7 +725,6 @@ export default function MainScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-
             <View style={{ marginTop: 18, alignSelf: "stretch", padding: 14, backgroundColor: "#f8fafc", borderRadius: 8, borderWidth: 1, borderColor: "#d5e4f7" }}>
               <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
               <TextInput
@@ -730,7 +753,6 @@ export default function MainScreen() {
               </TouchableOpacity>
               {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
             </View>
-
             <View style={{ alignSelf: "stretch", marginTop: 20, padding: 7, backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10 }}>
               <Text style={{ fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16 }}>
                 Auditoria PIX (ações recentes)
@@ -749,7 +771,6 @@ export default function MainScreen() {
                 ))}
               </ScrollView>
             </View>
-
             <TouchableOpacity
               style={{
                 marginTop: 8,
@@ -765,7 +786,6 @@ export default function MainScreen() {
             </TouchableOpacity>
             <StatusBar style="auto" />
           </ScrollView>
-
           {empresa?.dados && (
             <Modal
               visible={modalCnpjVisible}
@@ -807,7 +827,6 @@ export default function MainScreen() {
               </View>
             </Modal>
           )}
-
           <Modal
             visible={modalLogVisible}
             animationType="fade"
@@ -874,7 +893,6 @@ export default function MainScreen() {
               </View>
             </View>
           </Modal>
-
           <Modal
             visible={!!pixQr}
             animationType="slide"
@@ -958,16 +976,17 @@ export default function MainScreen() {
   return (
     <>
       {RenderedScreen}
-      <TabBar
-        routes={routes}
-        activeIndex={activeScreen}
-        onNavigate={setActiveScreen}
-      />
+      {isLoggedIn && (
+        <TabBar
+          routes={routes}
+          activeIndex={activeScreen}
+          onNavigate={setActiveScreen}
+        />
+      )}
     </>
   );
 }
 
-// ----------- estilos originais mantidos abaixo --------
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
   loginCard: {
