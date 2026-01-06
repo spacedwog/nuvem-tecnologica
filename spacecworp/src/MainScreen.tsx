@@ -25,6 +25,12 @@ import { StatusESP } from './domain/StatusESP';
 import { ConsultaCNPJService } from './services/ConsultaCNPJService';
 import { ESP32Service } from './services/ESP32Service';
 
+// Telas extras para navegação
+import ConsultaCNPJScreen from './screens/ConsultaCNPJScreen';
+import ECommerceScreen from './screens/ECommerceScreen';
+import TabBar from './components/TabBar';
+
+// -------------------- PIX/Log helpers --------------------
 const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
 const AUDIT_LOG_API = "https://nuvem-tecnologica.vercel.app/api/audit-log";
 function formatPixValue(input: string): string {
@@ -44,7 +50,6 @@ function formatPixValue(input: string): string {
   }
   return formatted;
 }
-
 const PIX_AMOUNT_REGEX = /^\d{1,13}(\.\d{1,2})?$/;
 
 type PixAudit = {
@@ -61,7 +66,6 @@ type PixAudit = {
   resposta?: any;
 };
 
-// Função genérica para log de auditoria Pix
 async function logPixAudit(event: string, details = {}, empresa: Empresa | null) {
   await fetch(AUDIT_LOG_API, {
     method: 'POST',
@@ -113,7 +117,17 @@ async function confirmarPix(id: string) {
   return res.json();
 }
 
-export default function App() {
+// -------------------- COMPONENT --------------------
+export default function MainScreen() {
+  // -------------------- Navegação --------------------
+  const routes = [
+    { key: 'home', title: 'Home' },
+    { key: 'empresas', title: 'Empresas' },
+    { key: 'ECommerce', title: 'ECommerce' },
+  ];
+  const [activeScreen, setActiveScreen] = useState(0);
+
+  // -------------------- Estados tela Home --------------
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [cnpj, setCnpj] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -528,413 +542,432 @@ export default function App() {
     ];
   }
 
-  // Telas e modais
-  if (!isLoggedIn) {
-    return (
-      <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Animated.View style={{
-          opacity: logoAnim,
-          transform: [{
-            scale: logoAnim.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.85, 1],
-            }),
-          }]
-        }}>
-          <View style={loginStyles.logoArea}>
-            <MaterialIcons name="account-balance" size={57} color="#3182ce" />
-            <Text style={loginStyles.empresaText}>Spacecworp</Text>
-          </View>
-        </Animated.View>
-        <Animated.View
-          style={{
+  // =============== Render navegação: ===================
+  let RenderedScreen = null;
+  if (activeScreen === 0) {
+    // ---------- TELA HOME/PRINCIPAL ----------
+    if (!isLoggedIn) {
+      RenderedScreen = (
+        <KeyboardAvoidingView style={loginStyles.loginBg} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Animated.View style={{
+            opacity: logoAnim,
             transform: [{
-              translateY: cardAnim.interpolate({
+              scale: logoAnim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [70, 0]
-              })
-            }],
-            opacity: cardAnim,
-            width: '100%'
+                outputRange: [0.85, 1],
+              }),
+            }]
           }}>
-          <View style={loginStyles.loginCard}>
-            <Text style={loginStyles.loginTitle}>Login Empresarial</Text>
-            <Text style={loginStyles.loginSubtitle}>Acesso restrito via CNPJ</Text>
-            <View style={loginStyles.inputArea}>
-              <Ionicons name="key-outline" size={22} color="#5072b7" style={{ marginRight: 7 }} />
-              <TextInput
-                style={loginStyles.inputCnpj}
-                value={cnpj}
-                keyboardType="numeric"
-                placeholder="CNPJ (XX.XXX.XXX/XXXX-XX)"
-                onChangeText={handleChangeCNPJ}
-                maxLength={18}
-                editable={!isLoading}
-                returnKeyType="done"
-                autoCapitalize="none"
-              />
+            <View style={loginStyles.logoArea}>
+              <MaterialIcons name="account-balance" size={57} color="#3182ce" />
+              <Text style={loginStyles.empresaText}>Spacecworp</Text>
             </View>
-            <TouchableOpacity
-              style={loginStyles.buttonEntrar}
-              activeOpacity={0.75}
-              onPress={loginCNPJ}
-              disabled={isLoading || cnpj.length < 18}
-            >
-              {isLoading
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>Entrar</Text>}
-            </TouchableOpacity>
-            {errorMsg && <Text style={loginStyles.errorMsg}>{errorMsg}</Text>}
-            {successMsg && <Animated.Text style={[loginStyles.successMsg, { opacity: fadeAnim }]}>{successMsg}</Animated.Text>}
-          </View>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    );
-  }
-
-  const modalPagesData = getModalPagesData(empresa);
-
-  return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleReload}
-            colors={["#0077ff"]}
-          />
-        }
-      >
-        <Text style={styles.heading}>ESP32-CAM (VESPA)</Text>
-        <Text style={[
-          styles.connectionStatus,
-          isConnected ? styles.connected : styles.disconnected
-        ]}>
-          {isConnected ? "Status: Conectado" : "Status: Desconectado"}
-        </Text>
-        <View style={styles.buttonRow}>
-          <Button
-            title="Conectar"
-            onPress={handleConnect}
-            color={isConnected ? 'gray' : '#0077ff'}
-            disabled={isConnected}
-          />
-          <Button
-            title="Desconectar"
-            onPress={handleDisconnect}
-            color={isConnected ? '#d60000' : 'gray'}
-            disabled={!isConnected}
-          />
-          <Button title="Exibir log" onPress={openModalLog} />
-        </View>
-        <View style={styles.sendRow}>
-          <TextInput
-            style={styles.inputText}
-            value={textToSend}
-            onChangeText={setTextToSend}
-            placeholder="Digite sua mensagem"
-            editable={isConnected}
-            onSubmitEditing={() => handleSendData()}
-            returnKeyType="send"
-          />
-          <TouchableOpacity
-            onPress={() => handleSendData()}
-            style={[
-              styles.sendButton,
-              !isConnected && styles.sendButtonDisabled
-            ]}
-            disabled={!isConnected || !textToSend.trim()}
-          >
-            <Text style={styles.sendButtonText}>Enviar</Text>
-          </TouchableOpacity>
-        </View>
-        {isConnected && (
-          <View style={styles.statusBox}>
-            <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
-          </View>
-        )}
-        <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {empresa?.dados?.fantasia || empresa?.cnpj}</Text>
-        {empresa?.dados && (
-          <TouchableOpacity
-            style={styles.cnpjButton}
-            onPress={() => openModalPage(0)}
-            activeOpacity={0.8}
-          >
-            <Text style={{ color: '#3182ce', fontWeight: 'bold', textAlign: 'center' }}>
-              Ver dados completos da Empresa
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        {empresa?.dados && isConnected && (
-          <TouchableOpacity
+          </Animated.View>
+          <Animated.View
             style={{
-              marginTop: 14,
-              backgroundColor: "#3182ce",
-              paddingHorizontal: 28,
-              paddingVertical: 12,
-              alignSelf: "center",
-              borderRadius: 8,
-            }}
-            onPress={handleSendCompanyToVespa}
-            activeOpacity={0.8}
-          >
-            <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>
-              Enviar dados empresariais para a VESPA
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <View style={{ marginTop: 18, alignSelf: "stretch", padding: 14, backgroundColor: "#f8fafc", borderRadius: 8, borderWidth: 1, borderColor: "#d5e4f7" }}>
-          <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
-          <TextInput
-            style={[styles.inputText, { marginBottom: 8 }]}
-            value={pixAmountText}
-            onChangeText={v => setPixAmountText(formatPixValue(v))}
-            onBlur={() => setPixAmountText(formatPixValue(pixAmountText))}
-            placeholder="Valor (R$)"
-            keyboardType="decimal-pad"
-          />
-          <Text style={{ color: "#4068de", fontSize: 14, fontWeight: "bold", marginBottom: 4 }}>
-            Valor final: {pixAmountText && !isNaN(Number(pixAmountText)) ? Number(pixAmountText).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : ''}
-          </Text>
-          <TextInput
-            style={[styles.inputText, { marginBottom: 8 }]}
-            value={pixDesc}
-            onChangeText={setPixDesc}
-            placeholder="Descrição"
-          />
-          <TouchableOpacity
-            style={[styles.sendButton, { alignSelf: "center" }]}
-            onPress={handleCobrarPix}
-            disabled={isLoading || Number(pixAmountText) < 0.01}
-          >
-            <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
-          </TouchableOpacity>
-          {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
-        </View>
-
-        <View style={{ alignSelf: "stretch", marginTop: 20, padding: 7, backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10 }}>
-          <Text style={{ fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16 }}>
-            Auditoria PIX (ações recentes)
-          </Text>
-          <ScrollView style={{ maxHeight: 100 }}>
-            {pixAuditLog.length === 0 &&
-              <Text style={{ color: "#b99847" }}>Nenhuma atividade Pix registrada nesta sessão.</Text>}
-            {pixAuditLog.length > 0 && pixAuditLog.slice(-5).reverse().map((entry, idx) => (
-              <Text key={idx} style={{ color: "#654413" }}>
-                [{new Date(entry.timestamp).toLocaleString('pt-BR')}] {entry.event} 
-                {entry.valorPix ? ` - Valor: ${Number(entry.valorPix).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}
-                {entry.pixId ? ` - pixId: ${entry.pixId}` : ''}
-                {entry.status ? ` - Status: ${entry.status}` : ''}
-                {entry.motivo ? ` - Motivo: ${entry.motivo}` : ''}
-              </Text>
-            ))}
-          </ScrollView>
-        </View>
-
-        <TouchableOpacity
-          style={{
-            marginTop: 8,
-            backgroundColor: '#E53E3E',
-            paddingHorizontal: 30,
-            paddingVertical: 10,
-            borderRadius: 8,
-            alignSelf: 'center',
-          }}
-          onPress={handleLogout}
-        >
-          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Logout</Text>
-        </TouchableOpacity>
-        <StatusBar style="auto" />
-      </ScrollView>
-
-      {empresa?.dados && (
-      <Modal
-        visible={modalCnpjVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={closeModalPage}>
-        <View style={modalStyles.wrapper}>
-          <View style={modalStyles.modalCard}>
-            <Text style={modalStyles.modalTitle}>
-              {modalPagesData[modalPage]?.title ?? ''}
-            </Text>
-            <ScrollView style={modalStyles.modalContent}>
-              {modalPagesData[modalPage]?.content}
-            </ScrollView>
-            <View style={modalStyles.modalPaginationRow}>
+              transform: [{
+                translateY: cardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [70, 0]
+                })
+              }],
+              opacity: cardAnim,
+              width: '100%'
+            }}>
+            <View style={loginStyles.loginCard}>
+              <Text style={loginStyles.loginTitle}>Login Empresarial</Text>
+              <Text style={loginStyles.loginSubtitle}>Acesso restrito via CNPJ</Text>
+              <View style={loginStyles.inputArea}>
+                <Ionicons name="key-outline" size={22} color="#5072b7" style={{ marginRight: 7 }} />
+                <TextInput
+                  style={loginStyles.inputCnpj}
+                  value={cnpj}
+                  keyboardType="numeric"
+                  placeholder="CNPJ (XX.XXX.XXX/XXXX-XX)"
+                  onChangeText={handleChangeCNPJ}
+                  maxLength={18}
+                  editable={!isLoading}
+                  returnKeyType="done"
+                  autoCapitalize="none"
+                />
+              </View>
               <TouchableOpacity
-                style={[modalStyles.modalPaginationBtn, modalPage === 0 && { opacity: 0.5 }]}
-                disabled={modalPage === 0}
-                onPress={prevModalPage}
+                style={loginStyles.buttonEntrar}
+                activeOpacity={0.75}
+                onPress={loginCNPJ}
+                disabled={isLoading || cnpj.length < 18}
               >
-                <Text style={modalStyles.pgBtnText}>Anterior</Text>
+                {isLoading
+                  ? <ActivityIndicator color="#fff" size="small" />
+                  : <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>Entrar</Text>}
               </TouchableOpacity>
-              <Text style={modalStyles.pgIndicator}>{modalPage+1} / {MODAL_PAGES.length}</Text>
+              {errorMsg && <Text style={loginStyles.errorMsg}>{errorMsg}</Text>}
+              {successMsg && <Animated.Text style={[loginStyles.successMsg, { opacity: fadeAnim }]}>{successMsg}</Animated.Text>}
+            </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      );
+    } else {
+      const modalPagesData = getModalPagesData(empresa);
+
+      RenderedScreen = (
+        <View style={styles.container}>
+          <ScrollView
+            contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleReload}
+                colors={["#0077ff"]}
+              />
+            }
+          >
+            <Text style={styles.heading}>ESP32-CAM (VESPA)</Text>
+            <Text style={[
+              styles.connectionStatus,
+              isConnected ? styles.connected : styles.disconnected
+            ]}>
+              {isConnected ? "Status: Conectado" : "Status: Desconectado"}
+            </Text>
+            <View style={styles.buttonRow}>
+              <Button
+                title="Conectar"
+                onPress={handleConnect}
+                color={isConnected ? 'gray' : '#0077ff'}
+                disabled={isConnected}
+              />
+              <Button
+                title="Desconectar"
+                onPress={handleDisconnect}
+                color={isConnected ? '#d60000' : 'gray'}
+                disabled={!isConnected}
+              />
+              <Button title="Exibir log" onPress={openModalLog} />
+            </View>
+            <View style={styles.sendRow}>
+              <TextInput
+                style={styles.inputText}
+                value={textToSend}
+                onChangeText={setTextToSend}
+                placeholder="Digite sua mensagem"
+                editable={isConnected}
+                onSubmitEditing={() => handleSendData()}
+                returnKeyType="send"
+              />
               <TouchableOpacity
-                style={[modalStyles.modalPaginationBtn, modalPage === MODAL_PAGES.length-1 && { opacity: 0.5 }]}
-                disabled={modalPage === MODAL_PAGES.length-1}
-                onPress={nextModalPage}
+                onPress={() => handleSendData()}
+                style={[
+                  styles.sendButton,
+                  !isConnected && styles.sendButtonDisabled
+                ]}
+                disabled={!isConnected || !textToSend.trim()}
               >
-                <Text style={modalStyles.pgBtnText}>Próximo</Text>
+                <Text style={styles.sendButtonText}>Enviar</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity
-              style={modalStyles.closeModalBtn}
-              onPress={closeModalPage}
-            >
-              <Text style={modalStyles.closeModalText}>Fechar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-      )}
-
-      <Modal
-        visible={modalLogVisible}
-        animationType="fade"
-        transparent
-        onRequestClose={closeModalLog}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Log - Informações do VESPA</Text>
-            <ScrollView
-              style={[styles.logContainer, { minHeight: 120 }]}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={handleReload}
-                  colors={["#0077ff"]}
-                />
-              }
-            >
-              {status && (
-                <>
-                  <Text style={styles.logText}>
-                    <Text style={{ fontWeight: 'bold' }}>Modo WiFi:</Text> {status.wifi_mode}
-                  </Text>
-                  <Text style={styles.logText}>
-                    <Text style={{ fontWeight: 'bold' }}>SSID:</Text> {status.ssid || "-"}
-                  </Text>
-                  <Text style={styles.logText}>
-                    <Text style={{ fontWeight: 'bold' }}>IP:</Text> {status.ip || "-"}
-                  </Text>
-                  <Text style={styles.logText}>
-                    <Text style={{ fontWeight: 'bold' }}>MAC:</Text> {status.mac || "-"}
-                  </Text>
-                  <Text style={styles.logText}>
-                    <Text style={{ fontWeight: 'bold' }}>Status hardware:</Text> {status.status_hw || "-"}
-                  </Text>
-                </>
-              )}
-              <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 7, marginTop: 18 }]}>Eventos:</Text>
-              {log.length === 0 ? (
-                <Text style={styles.emptyText}>Nenhum evento ainda</Text>
-              ) : (
-                log.map((item, i) => (
-                  <Text key={i}
-                    style={[
-                      styles.logText,
-                      item.type === "error" && styles.error,
-                      item.type === "success" && styles.success,
-                      item.type === "sent" && styles.sent,
-                      item.type === "received" && styles.received,
-                      item.type === "info" && styles.info,
-                      item.type === "closed" && styles.closed,
-                      item.type === "notify" && styles.notify,
-                    ]}
-                  >
-                    [{item.time}] {item.msg}
-                  </Text>
-                ))
-              )}
-            </ScrollView>
-            <TouchableOpacity style={styles.closeButton} onPress={closeModalLog}>
-              <Text style={styles.closeButtonText}>Fechar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal
-        visible={!!pixQr}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPixQr(null)}
-      >
-        <View style={modalStyles.wrapper}>
-          <View
-            style={[
-              modalStyles.modalCard,
-              {
-                justifyContent: 'space-between',
-                minHeight: 420,
-                maxHeight: Dimensions.get('window').height * 0.88,
-              },
-            ]}
-          >
-            <View>
-              <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
-              <Text style={{ fontWeight: "bold", marginTop: 10 }}>Valor:</Text>
-              <Text style={{ marginBottom: 8 }}>
-                {Number(pixAmountText).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-              </Text>
-              <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave (CNPJ):</Text>
-              <Text style={{ marginBottom: 8 }}>
-                {empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000"}
-              </Text>
-              <Text style={{ fontWeight: "bold", marginTop: 10 }}>Nome Fantasia:</Text>
-              <Text style={{ marginBottom: 8 }}>
-                {empresa?.dados?.fantasia || "-"}
-              </Text>
-              <Text style={{ fontWeight: "bold", marginTop: 4 }}>Cidade:</Text>
-              <Text style={{ marginBottom: 8 }}>
-                {empresa?.dados?.municipio || "-"}
-              </Text>
-              <Text style={{ fontWeight: "bold" }}>QR Code (copia e cola):</Text>
-              <ScrollView style={{ maxHeight: 60, backgroundColor: "#f4f7fb", borderRadius: 8, marginBottom: 8, padding: 6 }}>
-                <Text selectable style={{ fontSize: 12 }}>{pixQr}</Text>
-              </ScrollView>
-              <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
-              <Text>{pixStatus}</Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-around",
-                  marginVertical: 12,
-                }}
+            {isConnected && (
+              <View style={styles.statusBox}>
+                <Text>Modo WiFi: <Text style={{ fontWeight: "bold" }}>{status?.wifi_mode}</Text></Text>
+              </View>
+            )}
+            <Text style={{ color: "#aaa", marginTop: 10 }}>Empresa logada: {empresa?.dados?.fantasia || empresa?.cnpj}</Text>
+            {empresa?.dados && (
+              <TouchableOpacity
+                style={styles.cnpjButton}
+                onPress={() => openModalPage(0)}
+                activeOpacity={0.8}
               >
-                <TouchableOpacity
-                  style={modalStyles.modalPaginationBtn}
-                  onPress={handleStatusPix}
+                <Text style={{ color: '#3182ce', fontWeight: 'bold', textAlign: 'center' }}>
+                  Ver dados completos da Empresa
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {empresa?.dados && isConnected && (
+              <TouchableOpacity
+                style={{
+                  marginTop: 14,
+                  backgroundColor: "#3182ce",
+                  paddingHorizontal: 28,
+                  paddingVertical: 12,
+                  alignSelf: "center",
+                  borderRadius: 8,
+                }}
+                onPress={handleSendCompanyToVespa}
+                activeOpacity={0.8}
+              >
+                <Text style={{ color: "#fff", fontWeight: "bold", fontSize: 17 }}>
+                  Enviar dados empresariais para a VESPA
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={{ marginTop: 18, alignSelf: "stretch", padding: 14, backgroundColor: "#f8fafc", borderRadius: 8, borderWidth: 1, borderColor: "#d5e4f7" }}>
+              <Text style={{ fontWeight: "bold", marginBottom: 4 }}>Cobrar via PIX</Text>
+              <TextInput
+                style={[styles.inputText, { marginBottom: 8 }]}
+                value={pixAmountText}
+                onChangeText={v => setPixAmountText(formatPixValue(v))}
+                onBlur={() => setPixAmountText(formatPixValue(pixAmountText))}
+                placeholder="Valor (R$)"
+                keyboardType="decimal-pad"
+              />
+              <Text style={{ color: "#4068de", fontSize: 14, fontWeight: "bold", marginBottom: 4 }}>
+                Valor final: {pixAmountText && !isNaN(Number(pixAmountText)) ? Number(pixAmountText).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : ''}
+              </Text>
+              <TextInput
+                style={[styles.inputText, { marginBottom: 8 }]}
+                value={pixDesc}
+                onChangeText={setPixDesc}
+                placeholder="Descrição"
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, { alignSelf: "center" }]}
+                onPress={handleCobrarPix}
+                disabled={isLoading || Number(pixAmountText) < 0.01}
+              >
+                <Text style={styles.sendButtonText}>{isLoading ? "Carregando..." : "Gerar QR PIX"}</Text>
+              </TouchableOpacity>
+              {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
+            </View>
+
+            <View style={{ alignSelf: "stretch", marginTop: 20, padding: 7, backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10 }}>
+              <Text style={{ fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16 }}>
+                Auditoria PIX (ações recentes)
+              </Text>
+              <ScrollView style={{ maxHeight: 100 }}>
+                {pixAuditLog.length === 0 &&
+                  <Text style={{ color: "#b99847" }}>Nenhuma atividade Pix registrada nesta sessão.</Text>}
+                {pixAuditLog.length > 0 && pixAuditLog.slice(-5).reverse().map((entry, idx) => (
+                  <Text key={idx} style={{ color: "#654413" }}>
+                    [{new Date(entry.timestamp).toLocaleString('pt-BR')}] {entry.event}
+                    {entry.valorPix ? ` - Valor: ${Number(entry.valorPix).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : ''}
+                    {entry.pixId ? ` - pixId: ${entry.pixId}` : ''}
+                    {entry.status ? ` - Status: ${entry.status}` : ''}
+                    {entry.motivo ? ` - Motivo: ${entry.motivo}` : ''}
+                  </Text>
+                ))}
+              </ScrollView>
+            </View>
+
+            <TouchableOpacity
+              style={{
+                marginTop: 8,
+                backgroundColor: '#E53E3E',
+                paddingHorizontal: 30,
+                paddingVertical: 10,
+                borderRadius: 8,
+                alignSelf: 'center',
+              }}
+              onPress={handleLogout}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Logout</Text>
+            </TouchableOpacity>
+            <StatusBar style="auto" />
+          </ScrollView>
+
+          {empresa?.dados && (
+            <Modal
+              visible={modalCnpjVisible}
+              animationType="slide"
+              transparent
+              onRequestClose={closeModalPage}>
+              <View style={modalStyles.wrapper}>
+                <View style={modalStyles.modalCard}>
+                  <Text style={modalStyles.modalTitle}>
+                    {modalPagesData[modalPage]?.title ?? ''}
+                  </Text>
+                  <ScrollView style={modalStyles.modalContent}>
+                    {modalPagesData[modalPage]?.content}
+                  </ScrollView>
+                  <View style={modalStyles.modalPaginationRow}>
+                    <TouchableOpacity
+                      style={[modalStyles.modalPaginationBtn, modalPage === 0 && { opacity: 0.5 }]}
+                      disabled={modalPage === 0}
+                      onPress={prevModalPage}
+                    >
+                      <Text style={modalStyles.pgBtnText}>Anterior</Text>
+                    </TouchableOpacity>
+                    <Text style={modalStyles.pgIndicator}>{modalPage+1} / {MODAL_PAGES.length}</Text>
+                    <TouchableOpacity
+                      style={[modalStyles.modalPaginationBtn, modalPage === MODAL_PAGES.length-1 && { opacity: 0.5 }]}
+                      disabled={modalPage === MODAL_PAGES.length-1}
+                      onPress={nextModalPage}
+                    >
+                      <Text style={modalStyles.pgBtnText}>Próximo</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    style={modalStyles.closeModalBtn}
+                    onPress={closeModalPage}
+                  >
+                    <Text style={modalStyles.closeModalText}>Fechar</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Modal>
+          )}
+
+          <Modal
+            visible={modalLogVisible}
+            animationType="fade"
+            transparent
+            onRequestClose={closeModalLog}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Log - Informações do VESPA</Text>
+                <ScrollView
+                  style={[styles.logContainer, { minHeight: 120 }]}
+                  refreshControl={
+                    <RefreshControl
+                      refreshing={refreshing}
+                      onRefresh={handleReload}
+                      colors={["#0077ff"]}
+                    />
+                  }
                 >
-                  <Text style={modalStyles.pgBtnText}>Atualizar Status</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={modalStyles.modalPaginationBtn}
-                  onPress={handleConfirmPix}
-                >
-                  <Text style={modalStyles.pgBtnText}>Confirmar Pagamento</Text>
+                  {status && (
+                    <>
+                      <Text style={styles.logText}>
+                        <Text style={{ fontWeight: 'bold' }}>Modo WiFi:</Text> {status.wifi_mode}
+                      </Text>
+                      <Text style={styles.logText}>
+                        <Text style={{ fontWeight: 'bold' }}>SSID:</Text> {status.ssid || "-"}
+                      </Text>
+                      <Text style={styles.logText}>
+                        <Text style={{ fontWeight: 'bold' }}>IP:</Text> {status.ip || "-"}
+                      </Text>
+                      <Text style={styles.logText}>
+                        <Text style={{ fontWeight: 'bold' }}>MAC:</Text> {status.mac || "-"}
+                      </Text>
+                      <Text style={styles.logText}>
+                        <Text style={{ fontWeight: 'bold' }}>Status hardware:</Text> {status.status_hw || "-"}
+                      </Text>
+                    </>
+                  )}
+                  <Text style={[styles.cardTitle, { fontSize: 17, marginBottom: 7, marginTop: 18 }]}>Eventos:</Text>
+                  {log.length === 0 ? (
+                    <Text style={styles.emptyText}>Nenhum evento ainda</Text>
+                  ) : (
+                    log.map((item, i) => (
+                      <Text key={i}
+                        style={[
+                          styles.logText,
+                          item.type === "error" && styles.error,
+                          item.type === "success" && styles.success,
+                          item.type === "sent" && styles.sent,
+                          item.type === "received" && styles.received,
+                          item.type === "info" && styles.info,
+                          item.type === "closed" && styles.closed,
+                          item.type === "notify" && styles.notify,
+                        ]}
+                      >
+                        [{item.time}] {item.msg}
+                      </Text>
+                    ))
+                  )}
+                </ScrollView>
+                <TouchableOpacity style={styles.closeButton} onPress={closeModalLog}>
+                  <Text style={styles.closeButtonText}>Fechar</Text>
                 </TouchableOpacity>
               </View>
             </View>
-            <TouchableOpacity
-              style={[modalStyles.closeModalBtn, { marginTop: 8, alignSelf: 'center' }]}
-              onPress={() => setPixQr(null)}
-            >
-              <Text style={modalStyles.closeModalText}>Fechar</Text>
-            </TouchableOpacity>
-          </View>
+          </Modal>
+
+          <Modal
+            visible={!!pixQr}
+            animationType="slide"
+            transparent
+            onRequestClose={() => setPixQr(null)}
+          >
+            <View style={modalStyles.wrapper}>
+              <View
+                style={[
+                  modalStyles.modalCard,
+                  {
+                    justifyContent: 'space-between',
+                    minHeight: 420,
+                    maxHeight: Dimensions.get('window').height * 0.88,
+                  },
+                ]}
+              >
+                <View>
+                  <Text style={modalStyles.modalTitle}>Cobrança PIX</Text>
+                  <Text style={{ fontWeight: "bold", marginTop: 10 }}>Valor:</Text>
+                  <Text style={{ marginBottom: 8 }}>
+                    {Number(pixAmountText).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </Text>
+                  <Text style={{ fontWeight: "bold", marginTop: 10 }}>Chave (CNPJ):</Text>
+                  <Text style={{ marginBottom: 8 }}>
+                    {empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000"}
+                  </Text>
+                  <Text style={{ fontWeight: "bold", marginTop: 10 }}>Nome Fantasia:</Text>
+                  <Text style={{ marginBottom: 8 }}>
+                    {empresa?.dados?.fantasia || "-"}
+                  </Text>
+                  <Text style={{ fontWeight: "bold", marginTop: 4 }}>Cidade:</Text>
+                  <Text style={{ marginBottom: 8 }}>
+                    {empresa?.dados?.municipio || "-"}
+                  </Text>
+                  <Text style={{ fontWeight: "bold" }}>QR Code (copia e cola):</Text>
+                  <ScrollView style={{ maxHeight: 60, backgroundColor: "#f4f7fb", borderRadius: 8, marginBottom: 8, padding: 6 }}>
+                    <Text selectable style={{ fontSize: 12 }}>{pixQr}</Text>
+                  </ScrollView>
+                  <Text style={{ fontWeight: "bold", marginTop: 14 }}>Status:</Text>
+                  <Text>{pixStatus}</Text>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-around",
+                      marginVertical: 12,
+                    }}
+                  >
+                    <TouchableOpacity
+                      style={modalStyles.modalPaginationBtn}
+                      onPress={handleStatusPix}
+                    >
+                      <Text style={modalStyles.pgBtnText}>Atualizar Status</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={modalStyles.modalPaginationBtn}
+                      onPress={handleConfirmPix}
+                    >
+                      <Text style={modalStyles.pgBtnText}>Confirmar Pagamento</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  style={[modalStyles.closeModalBtn, { marginTop: 8, alignSelf: 'center' }]}
+                  onPress={() => setPixQr(null)}
+                >
+                  <Text style={modalStyles.closeModalText}>Fechar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-    </View>
+      );
+    }
+  } else if (activeScreen === 1) {
+    RenderedScreen = <ConsultaCNPJScreen />;
+  } else if (activeScreen === 2) {
+    RenderedScreen = <ECommerceScreen />;
+  }
+
+  return (
+    <>
+      {RenderedScreen}
+      <TabBar
+        routes={routes}
+        activeIndex={activeScreen}
+        onNavigate={setActiveScreen}
+      />
+    </>
   );
 }
 
-// Estilos originais
+// ----------- estilos originais mantidos abaixo --------
 const loginStyles = StyleSheet.create({
   loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
   loginCard: {
