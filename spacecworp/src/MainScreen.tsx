@@ -24,98 +24,19 @@ import { LogEntry } from './domain/LogEntry';
 import { StatusESP } from './domain/StatusESP';
 import { ConsultaCNPJService } from './services/ConsultaCNPJService';
 import { ESP32Service } from './services/ESP32Service';
+
 import ConsultaCNPJScreen from './screens/ConsultaCNPJScreen';
 import ECommerceScreen from './screens/ECommerceScreen';
 import TabBar from './components/TabBar';
 
-// PIX helpers
-const PIX_API = "https://nuvem-tecnologica.vercel.app/api/pix";
-const AUDIT_LOG_API = "https://nuvem-tecnologica.vercel.app/api/audit-log";
-function formatPixValue(input: string): string {
-  let val = input.replace(/,/g, '.').replace(/[^\d.]/g, '');
-  const parts = val.split('.');
-  let intPart = parts[0].replace(/^0+/, '');
-  if (intPart === '') intPart = '0';
-  let decPart = parts[1] || '';
-  intPart = intPart.slice(0, 13);
-  decPart = decPart.slice(0, 2);
-  let formatted = intPart;
-  if (val.includes('.') || decPart) {
-    formatted += '.' + decPart;
-  }
-  if ((val.endsWith('.') || decPart.length < 2) && formatted.match(/^\d+\.$/)) {
-    formatted += '00'.slice(0, 2 - decPart.length);
-  }
-  return formatted;
-}
-const PIX_AMOUNT_REGEX = /^\d{1,13}(\.\d{1,2})?$/;
+import { PixUtils } from './utils/PixUtils';
+import { PixService } from './services/PixService';
+import { PixAuditoriaManager, PixAudit } from './services/PixAuditoriaManager';
 
-type PixAudit = {
-  event: string;
-  timestamp: string;
-  valorPix?: string;
-  descricao?: string;
-  user?: string;
-  pixId?: string;
-  pixStatus?: string;
-  qr?: string;
-  status?: string;
-  motivo?: string;
-  resposta?: any;
-};
+const MODAL_PAGES = [
+  "empresa", "enderecos", "atividade_principal", "atividades_secundarias", "socios", "extra"
+];
 
-async function logPixAudit(event: string, details = {}, empresa: Empresa | null) {
-  await fetch(AUDIT_LOG_API, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      event,
-      details,
-      timestamp: new Date().toISOString(),
-      user: empresa?.dados?.fantasia || empresa?.cnpj || 'anônimo'
-    })
-  });
-}
-
-async function criarPix(
-  amount: number,
-  key: string,
-  description: string,
-  nome_fantasia: string,
-  cidade: string
-) {
-  const keySemMascara = key.replace(/\D/g, '');
-  const res = await fetch(PIX_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      action: "initiate",
-      amount,
-      key: keySemMascara,
-      description,
-      nome_fantasia,
-      cidade,
-    }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-async function statusPix(id: string) {
-  const res = await fetch(`${PIX_API}?action=status&id=${encodeURIComponent(id)}`);
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-async function confirmarPix(id: string) {
-  const res = await fetch(PIX_API, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "confirm", id }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-// ----------- COMPONENT -------------
 export default function MainScreen() {
   const routes = [
     { key: 'home', title: 'Home' },
@@ -154,6 +75,13 @@ export default function MainScreen() {
   const cardAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
+  // OOP: Pegue gerenciador sempre que empresa mudar
+  const auditoriaManagerRef = useRef<PixAuditoriaManager | null>(null);
+  useEffect(() => {
+    auditoriaManagerRef.current = new PixAuditoriaManager(setPixAuditLog, empresa);
+  }, [empresa, setPixAuditLog]);
+
+
   useEffect(() => {
     Animated.parallel([
       Animated.timing(logoAnim, { toValue: 1, duration: 950, useNativeDriver: true }),
@@ -174,12 +102,14 @@ export default function MainScreen() {
       } }
     ]);
   }
+
   function handleChangeCNPJ(text: string) {
     setErrorMsg(null);
     setSuccessMsg(null);
     setCnpj(Empresa.maskCNPJ(text));
     setEmpresa(null);
   }
+
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -303,16 +233,11 @@ export default function MainScreen() {
       setLog((prev) => [...prev, new LogEntry("Falha ao enviar dados: " + (e.message || e), "error")]);
     }
   }
+
   function addPixAudit(event: string, details: Record<string, any> = {}) {
-    const item: PixAudit = {
-      event,
-      timestamp: new Date().toISOString(),
-      ...details,
-      user: empresa?.dados?.fantasia || empresa?.cnpj || 'anônimo',
-    };
-    setPixAuditLog(prev => [...prev, item]);
-    logPixAudit(event, details, empresa);
+    auditoriaManagerRef.current?.addPixAudit(event, details);
   }
+
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
@@ -326,7 +251,7 @@ export default function MainScreen() {
           : parts[0].slice(0, 13);
       valConsolidado = valConsolidado.replace(/^0+(?!\.)/, '') || '0';
 
-      if (!PIX_AMOUNT_REGEX.test(valConsolidado) || Number(valConsolidado) < 0.01) {
+      if (!PixUtils.PIX_AMOUNT_REGEX.test(valConsolidado) || Number(valConsolidado) < 0.01) {
         setErrorMsg('Valor inválido! Use até 2 casas decimais, com ponto, mínimo R$0.01');
         addPixAudit('pix_invalid_value', { valorRaw, valConsolidado });
         setIsLoading(false);
@@ -342,7 +267,7 @@ export default function MainScreen() {
 
       const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
       const descPix = pixDesc || "Pagamento Spacecworp";
-      const resp = await criarPix(
+      const resp = await PixService.criarPix(
         Number(valorPix),
         keyPix,
         descPix,
@@ -381,7 +306,7 @@ export default function MainScreen() {
   async function handleStatusPix() {
     try {
       if (!pixId) return;
-      const resp = await statusPix(pixId);
+      const resp = await PixService.statusPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Status PIX: " + resp.status, "info")]);
       addPixAudit('pix_status_checked', {
@@ -396,7 +321,7 @@ export default function MainScreen() {
   async function handleConfirmPix() {
     try {
       if (!pixId) return;
-      const resp = await confirmarPix(pixId);
+      const resp = await PixService.confirmarPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Pagamento PIX confirmado!", "success")]);
       addPixAudit('pix_confirmed', {
@@ -409,14 +334,6 @@ export default function MainScreen() {
     }
   }
 
-  const MODAL_PAGES = [
-    "empresa",
-    "enderecos",
-    "atividade_principal",
-    "atividades_secundarias",
-    "socios",
-    "extra"
-  ];
   function getModalPagesData(e: Empresa | null) {
     if (!e) return [];
     const cnpjDados = e.dados;
@@ -686,8 +603,8 @@ export default function MainScreen() {
               <TextInput
                 style={[styles.inputText, { marginBottom: 8 }]}
                 value={pixAmountText}
-                onChangeText={v => setPixAmountText(formatPixValue(v))}
-                onBlur={() => setPixAmountText(formatPixValue(pixAmountText))}
+                onChangeText={v => setPixAmountText(PixUtils.formatValue(v))}
+                onBlur={() => setPixAmountText(PixUtils.formatValue(pixAmountText))}
                 placeholder="Valor (R$)"
                 keyboardType="decimal-pad"
               />
