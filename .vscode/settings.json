@@ -61,5 +61,6 @@
   "codeQL.githubDatabase.download": "never",
   "cSpell.words": [
     "preco"
-  ]
+  ],
+  "cmake.sourceDirectory": "C:/Users/felip/nuvem-tecnologica/node_modules/react-native/ReactCommon/callinvoker"
 }
