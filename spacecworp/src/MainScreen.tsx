@@ -33,6 +33,8 @@ import { PixUtils } from './utils/PixUtils';
 import { PixService } from './services/PixService';
 import { PixAuditoriaManager, PixAudit } from './services/PixAuditoriaManager';
 
+import { AdMobBanner } from 'expo-ads-admob'; // <- Google AdMob import
+
 const MODAL_PAGES = [
   "empresa", "enderecos", "atividade_principal", "atividades_secundarias", "socios", "extra"
 ];
@@ -849,12 +851,21 @@ export default function MainScreen() {
   return (
     <>
       {RenderedScreen}
+      {/* Banner AdMob Google visível após login */}
       {isLoggedIn && (
-        <TabBar
-          routes={routes}
-          activeIndex={activeScreen}
-          onNavigate={setActiveScreen}
-        />
+        <>
+          <AdMobBanner
+            bannerSize="AdBanner"
+            adUnitID="ca-app-pub-7218010744811775/6344763448"
+            servePersonalizedAds
+            onDidFailToReceiveAdWithError={(err) => console.log("Falha AdMob:", err)}
+          />
+          <TabBar
+            routes={routes}
+            activeIndex={activeScreen}
+            onNavigate={setActiveScreen}
+          />
+        </>
       )}
     </>
   );
