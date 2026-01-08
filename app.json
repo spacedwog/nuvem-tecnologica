@@ -1,0 +1,10 @@
+{
+  "android": {
+    "package": "com.spacedwog.nuvemtecnologica"
+  },
+  "extra": {
+    "eas": {
+      "projectId": "9703f88a-f40e-4a53-9313-e0d0464f137d"
+    }
+  }
+}

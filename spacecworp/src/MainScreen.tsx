@@ -19,70 +19,83 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
+// Banner via AppLovin MAX (para build nativo)
+import { MaxAdView } from 'react-native-applovin-max';
+// Alternativa WebView (para Expo Go, banners JS/HTML de terceiros)
+import { WebView } from 'react-native-webview';
+
 import { Empresa } from './domain/Empresa';
 import { LogEntry } from './domain/LogEntry';
 import { StatusESP } from './domain/StatusESP';
 import { ConsultaCNPJService } from './services/ConsultaCNPJService';
 import { ESP32Service } from './services/ESP32Service';
-
 import ConsultaCNPJScreen from './screens/ConsultaCNPJScreen';
 import ECommerceScreen from './screens/ECommerceScreen';
-import TabBar from './components/TabBar';
-
+// import TabBar from './components/TabBar'; // caso use tabs
 import { PixUtils } from './utils/PixUtils';
 import { PixService } from './services/PixService';
 import { PixAuditoriaManager, PixAudit } from './services/PixAuditoriaManager';
 
-import { BannerAd, BannerAdSize } from '@react-native-admob/admob';
+// Banner AppLovin (use só em build nativo).
+const BannerAppLovin = () => (
+  <View style={styles.bannerContainer}>
+    <MaxAdView
+      adUnitId="SUA_ADUNIT_BANNER_ID"
+      adFormat="BANNER"
+      style={{ width: 320, height: 50 }}
+      onAdLoadFailed={error => console.log('Erro banner:', error)}
+    />
+  </View>
+);
+
+// Banner WebView (só use para banners HTML de provedores que suportam)
+const BannerWebView = () => (
+  <View style={styles.bannerContainer}>
+    <WebView
+      originWhitelist={['*']}
+      source={{ html: `<iframe src="URL_DO_SEU_BANNER" width="320" height="50" style="border:none;"></iframe>` }}
+      style={{ backgroundColor: 'transparent' }}
+      scrollEnabled={false}
+    />
+  </View>
+);
 
 const MODAL_PAGES = [
   "empresa", "enderecos", "atividade_principal", "atividades_secundarias", "socios", "extra"
 ];
 
 export default function MainScreen() {
-  const routes = [
-    { key: 'home', title: 'Home' },
-    { key: 'empresas', title: 'Empresas' },
-    { key: 'ECommerce', title: 'ECommerce' },
-  ];
   const [activeScreen, setActiveScreen] = useState(0);
-
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
-  const [cnpj, setCnpj] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [cnpj, setCnpj] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [empresa, setEmpresa] = useState<Empresa | null>(null);
-
-  const [modalPage, setModalPage] = useState<number>(0);
-  const [modalCnpjVisible, setModalCnpjVisible] = useState<boolean>(false);
-  const [modalLogVisible, setModalLogVisible] = useState<boolean>(false);
-
+  const [modalPage, setModalPage] = useState(0);
+  const [modalCnpjVisible, setModalCnpjVisible] = useState(false);
+  const [modalLogVisible, setModalLogVisible] = useState(false);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [status, setStatus] = useState<StatusESP | null>(null);
-  const [isConnected, setIsConnected] = useState<boolean>(false);
-  const [textToSend, setTextToSend] = useState<string>('');
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-
+  const [isConnected, setIsConnected] = useState(false);
+  const [textToSend, setTextToSend] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   const [pixQr, setPixQr] = useState<string | null>(null);
   const [pixId, setPixId] = useState<string | null>(null);
   const [pixStatus, setPixStatus] = useState<string | null>(null);
   const [pixAmountText, setPixAmountText] = useState<string>('');
   const [pixDesc, setPixDesc] = useState<string>("");
   const [pixAuditLog, setPixAuditLog] = useState<PixAudit[]>([]);
-
   const notificationsPolling = useRef<NodeJS.Timeout | null>(null);
 
   const logoAnim = useRef(new Animated.Value(0)).current;
   const cardAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  // OOP: Pegue gerenciador sempre que empresa mudar
   const auditoriaManagerRef = useRef<PixAuditoriaManager | null>(null);
+
   useEffect(() => {
     auditoriaManagerRef.current = new PixAuditoriaManager(setPixAuditLog, empresa);
   }, [empresa, setPixAuditLog]);
-
 
   useEffect(() => {
     Animated.parallel([
@@ -104,14 +117,12 @@ export default function MainScreen() {
       } }
     ]);
   }
-
   function handleChangeCNPJ(text: string) {
     setErrorMsg(null);
     setSuccessMsg(null);
     setCnpj(Empresa.maskCNPJ(text));
     setEmpresa(null);
   }
-
   async function loginCNPJ() {
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -135,10 +146,7 @@ export default function MainScreen() {
       setIsLoading(false);
     }
   }
-  function openModalPage(page = 0) {
-    setModalPage(page);
-    setModalCnpjVisible(true);
-  }
+  function openModalPage(page = 0) { setModalPage(page); setModalCnpjVisible(true); }
   function nextModalPage() { setModalPage((p) => Math.min(p+1, MODAL_PAGES.length-1)); }
   function prevModalPage() { setModalPage((p) => Math.max(p-1, 0)); }
   function closeModalPage() { setModalCnpjVisible(false); setModalPage(0); }
@@ -156,14 +164,9 @@ export default function MainScreen() {
         return [...prev, ...news];
       });
     }
-    if (isConnected) {
-      notificationsPolling.current = setInterval(pollNotifications, 2000);
-    } else if (notificationsPolling.current) {
-      clearInterval(notificationsPolling.current);
-    }
-    return () => {
-      if (notificationsPolling.current) clearInterval(notificationsPolling.current);
-    }
+    if (isConnected) notificationsPolling.current = setInterval(pollNotifications, 2000);
+    else if (notificationsPolling.current) clearInterval(notificationsPolling.current);
+    return () => { if (notificationsPolling.current) clearInterval(notificationsPolling.current); }
   }, [isConnected]);
 
   async function handleReload() {
@@ -172,13 +175,9 @@ export default function MainScreen() {
       if (isConnected) {
         const s = await ESP32Service.fetchStatus();
         setStatus(new StatusESP(s));
-        setLog((prev) => [
-          ...prev, new LogEntry("Status atualizado!", "info")
-        ]);
+        setLog((prev) => [...prev, new LogEntry("Status atualizado!", "info")]);
       } else {
-        setLog((prev) => [
-          ...prev, new LogEntry("Não conectado: nada para atualizar.", "info")
-        ]);
+        setLog((prev) => [...prev, new LogEntry("Não conectado: nada para atualizar.", "info")]);
       }
     } catch (e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro ao atualizar status: " + e.message, "error")]);
@@ -235,16 +234,13 @@ export default function MainScreen() {
       setLog((prev) => [...prev, new LogEntry("Falha ao enviar dados: " + (e.message || e), "error")]);
     }
   }
-
   function addPixAudit(event: string, details: Record<string, any> = {}) {
     auditoriaManagerRef.current?.addPixAudit(event, details);
   }
-
   async function handleCobrarPix() {
     try {
       setIsLoading(true);
       setErrorMsg(null);
-
       let valorRaw = pixAmountText.replace(/,/g, '.').replace(/[^\d.]/g, '');
       const parts = valorRaw.split('.');
       let valConsolidado =
@@ -261,11 +257,7 @@ export default function MainScreen() {
       }
 
       const valorPix = Number(valConsolidado).toFixed(2);
-
-      addPixAudit('pix_request', {
-        valorPix,
-        descricao: pixDesc,
-      });
+      addPixAudit('pix_request', { valorPix, descricao: pixDesc });
 
       const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
       const descPix = pixDesc || "Pagamento Spacecworp";
@@ -296,7 +288,6 @@ export default function MainScreen() {
         pixStatus: resp.status,
         qr: resp.qr
       });
-
     } catch (e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro ao criar PIX: " + e.message, "error")]);
       setPixQr(null);
@@ -311,10 +302,7 @@ export default function MainScreen() {
       const resp = await PixService.statusPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Status PIX: " + resp.status, "info")]);
-      addPixAudit('pix_status_checked', {
-        pixId,
-        status: resp.status
-      });
+      addPixAudit('pix_status_checked', { pixId, status: resp.status });
     } catch(e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro status PIX: " + e.message, "error")]);
       addPixAudit('pix_error', { motivo: e.message });
@@ -326,16 +314,12 @@ export default function MainScreen() {
       const resp = await PixService.confirmarPix(pixId);
       setPixStatus(resp.status);
       setLog((prev) => [...prev, new LogEntry("Pagamento PIX confirmado!", "success")]);
-      addPixAudit('pix_confirmed', {
-        pixId,
-        status: resp.status
-      });
+      addPixAudit('pix_confirmed', { pixId, status: resp.status });
     } catch(e: any) {
       setLog((prev) => [...prev, new LogEntry("Erro ao confirmar PIX: " + e.message, "error")]);
       addPixAudit('pix_error', { motivo: e.message });
     }
   }
-
   function getModalPagesData(e: Empresa | null) {
     if (!e) return [];
     const cnpjDados = e.dados;
@@ -646,6 +630,9 @@ export default function MainScreen() {
                 ))}
               </ScrollView>
             </View>
+            {/* Escolha só um dos banners abaixo: */}
+            <BannerAppLovin />
+            {/* <BannerWebView /> */}
             <TouchableOpacity
               style={{
                 marginTop: 8,
@@ -661,6 +648,7 @@ export default function MainScreen() {
             </TouchableOpacity>
             <StatusBar style="auto" />
           </ScrollView>
+          {/* Modais (dados empresa, log, pix) – mantenha igual como no seu código */}
           {empresa?.dados && (
             <Modal
               visible={modalCnpjVisible}
@@ -847,49 +835,8 @@ export default function MainScreen() {
   } else if (activeScreen === 2) {
     RenderedScreen = <ECommerceScreen />;
   }
-
-  return (
-    <>
-      {RenderedScreen}
-      {/* Banner AdMob Google visível após login */}
-      {isLoggedIn && (
-        <>
-          <BannerAd
-            unitId={"ca-app-pub-7218010744811775/6344763448"} // Teste. Troque para seu id real em produção!
-            size={BannerAdSize.ADAPTIVE_BANNER}
-            onAdFailedToLoad={err => console.log("AdMob banner erro:", err)}
-          />
-          <TabBar
-            routes={routes}
-            activeIndex={activeScreen}
-            onNavigate={setActiveScreen}
-          />
-        </>
-      )}
-    </>
-  );
+  return RenderedScreen;
 }
-
-const loginStyles = StyleSheet.create({
-  loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
-  loginCard: {
-    width: '100%', maxWidth: 420,
-    backgroundColor: '#fff',
-    borderRadius: 18, padding: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.23, shadowRadius: 14, elevation: 14,
-    alignItems: 'center',
-  },
-  logoArea: { alignItems: 'center', marginBottom: 27 },
-  empresaText: { fontSize: 31, fontWeight: 'bold', color: '#193769', marginTop: 5, letterSpacing: 1.5 },
-  loginTitle: { fontSize: 22, fontWeight: 'bold', color: '#3182ce', marginBottom: 8 },
-  loginSubtitle: { fontSize: 14, color: '#666', marginBottom: 17 },
-  inputArea: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: '#f5f7fc', borderRadius: 10, marginBottom: 11, borderWidth: 1, borderColor: '#cde3fa', paddingHorizontal: 9 },
-  inputCnpj: { flex: 1, fontSize: 17, paddingVertical: 11, color: '#23292e' },
-  buttonEntrar: { width: '100%', backgroundColor: '#3182ce', borderRadius: 10, alignItems: 'center', paddingVertical: 15, marginTop: 7, elevation: 2 },
-  errorMsg: { color: '#d60000', fontWeight: 'bold', marginTop: 14 },
-  successMsg: { color: '#328d3f', fontWeight: 'bold', marginTop: 14, fontSize: 17 },
-});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
@@ -933,6 +880,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#b5ccf1"
   },
+  bannerContainer: {
+    alignSelf: "stretch", marginVertical: 18, alignItems: "center"
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center', },
   card: {
     width: '94%',
@@ -962,6 +912,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32, paddingVertical: 13, marginTop: 4,
   },
   closeButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
+  auditArea: {
+    alignSelf: "stretch", marginTop: 20, padding: 7,
+    backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10
+  },
+  auditTitle: {
+    fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16
+  },
+  logoutButton: {
+    marginTop: 8,
+    backgroundColor: '#E53E3E',
+    paddingHorizontal: 30,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignSelf: 'center',
+  },
   connectionStatus: { marginBottom: 11, fontSize: 15, textAlign: 'center', fontWeight: 'bold' },
   connected: { color: '#079b31' },
   disconnected: { color: '#d60000' },
@@ -974,6 +939,26 @@ const styles = StyleSheet.create({
   notify: { color: "#c97806", fontStyle: "italic", fontWeight: "bold" },
 });
 
+const loginStyles = StyleSheet.create({
+  loginBg: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#eaf1fb' },
+  loginCard: {
+    width: '100%', maxWidth: 420,
+    backgroundColor: '#fff',
+    borderRadius: 18, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.23, shadowRadius: 14, elevation: 14,
+    alignItems: 'center',
+  },
+  logoArea: { alignItems: 'center', marginBottom: 27 },
+  empresaText: { fontSize: 31, fontWeight: 'bold', color: '#193769', marginTop: 5, letterSpacing: 1.5 },
+  loginTitle: { fontSize: 22, fontWeight: 'bold', color: '#3182ce', marginBottom: 8 },
+  loginSubtitle: { fontSize: 14, color: '#666', marginBottom: 17 },
+  inputArea: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: '#f5f7fc', borderRadius: 10, marginBottom: 11, borderWidth: 1, borderColor: '#cde3fa', paddingHorizontal: 9 },
+  inputCnpj: { flex: 1, fontSize: 17, paddingVertical: 11, color: '#23292e' },
+  buttonEntrar: { width: '100%', backgroundColor: '#3182ce', borderRadius: 10, alignItems: 'center', paddingVertical: 15, marginTop: 7, elevation: 2 },
+  errorMsg: { color: '#d60000', fontWeight: 'bold', marginTop: 14 },
+  successMsg: { color: '#328d3f', fontWeight: 'bold', marginTop: 14, fontSize: 17 },
+});
 const modalStyles = StyleSheet.create({
   wrapper: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center' },
   modalCard: {
