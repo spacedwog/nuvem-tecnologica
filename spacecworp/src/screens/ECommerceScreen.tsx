@@ -11,7 +11,7 @@ import {
   TextInput,
 } from "react-native";
 import { Clipboard } from "react-native";
-import DocumentReaderModal from './DocumentReader'; // Assumindo que o arquivo está no mesmo diretório
+
 function formatBRL(value: number) {
   return value.toLocaleString("pt-BR", {
     style: "currency",
@@ -110,13 +110,6 @@ function ECommerceScreen() {
   // Pix
   const [pixModal, setPixModal] = useState(false);
   const [pixQr, setPixQr] = useState<string | null>(null);
-
-  const [docModalOpen, setDocModalOpen] = useState(false);
-
-  // Exemplo: Adicionar texto lido como descrição de novo produto!
-  function onTextReadFromDocument(text: string) {
-    setFormDesc(text); // ou algum outro tratamento!
-  }
 
   function addToCart(productId: string) {
     setCart((prev) => {
@@ -330,25 +323,6 @@ function ECommerceScreen() {
             Nenhum produto cadastrado.
           </Text>
         }
-      />
-
-      <TouchableOpacity
-        style={{
-          backgroundColor: "#5ab74d",
-          padding: 10,
-          borderRadius: 10,
-          marginVertical: 8,
-          alignSelf: "center"
-        }}
-        onPress={() => setDocModalOpen(true)}
-      >
-        <Text style={{ color: "#fff", fontWeight: "bold" }}>Ler Documento</Text>
-      </TouchableOpacity>
-      
-      <DocumentReaderModal
-        visible={docModalOpen}
-        onClose={() => setDocModalOpen(false)}
-        onTextRead={onTextReadFromDocument}
       />
 
       {/* Modal de Detalhe de Produto */}
