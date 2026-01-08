@@ -33,7 +33,7 @@ import { PixUtils } from './utils/PixUtils';
 import { PixService } from './services/PixService';
 import { PixAuditoriaManager, PixAudit } from './services/PixAuditoriaManager';
 
-import { AdMobBanner } from 'expo-ads-admob'; // <- Google AdMob import
+import { BannerAd, BannerAdSize } from '@react-native-admob/admob';
 
 const MODAL_PAGES = [
   "empresa", "enderecos", "atividade_principal", "atividades_secundarias", "socios", "extra"
@@ -854,11 +854,10 @@ export default function MainScreen() {
       {/* Banner AdMob Google visível após login */}
       {isLoggedIn && (
         <>
-          <AdMobBanner
-            bannerSize="AdBanner"
-            adUnitID="ca-app-pub-7218010744811775/6344763448"
-            servePersonalizedAds
-            onDidFailToReceiveAdWithError={(err) => console.log("Falha AdMob:", err)}
+          <BannerAd
+            unitId={"ca-app-pub-7218010744811775/6344763448"} // Teste. Troque para seu id real em produção!
+            size={BannerAdSize.ADAPTIVE_BANNER}
+            onAdFailedToLoad={err => console.log("AdMob banner erro:", err)}
           />
           <TabBar
             routes={routes}
