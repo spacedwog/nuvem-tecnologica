@@ -19,11 +19,6 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
-// Banner via AppLovin MAX (para build nativo)
-import { MaxAdView } from 'react-native-applovin-max';
-// Alternativa WebView (para Expo Go, banners JS/HTML de terceiros)
-import { WebView } from 'react-native-webview';
-
 import { Empresa } from './domain/Empresa';
 import { LogEntry } from './domain/LogEntry';
 import { StatusESP } from './domain/StatusESP';
@@ -31,34 +26,9 @@ import { ConsultaCNPJService } from './services/ConsultaCNPJService';
 import { ESP32Service } from './services/ESP32Service';
 import ConsultaCNPJScreen from './screens/ConsultaCNPJScreen';
 import ECommerceScreen from './screens/ECommerceScreen';
-// import TabBar from './components/TabBar'; // caso use tabs
 import { PixUtils } from './utils/PixUtils';
 import { PixService } from './services/PixService';
 import { PixAuditoriaManager, PixAudit } from './services/PixAuditoriaManager';
-
-// Banner AppLovin (use só em build nativo).
-const BannerAppLovin = () => (
-  <View style={styles.bannerContainer}>
-    <MaxAdView
-      adUnitId="SUA_ADUNIT_BANNER_ID"
-      adFormat="BANNER"
-      style={{ width: 320, height: 50 }}
-      onAdLoadFailed={error => console.log('Erro banner:', error)}
-    />
-  </View>
-);
-
-// Banner WebView (só use para banners HTML de provedores que suportam)
-const BannerWebView = () => (
-  <View style={styles.bannerContainer}>
-    <WebView
-      originWhitelist={['*']}
-      source={{ html: `<iframe src="URL_DO_SEU_BANNER" width="320" height="50" style="border:none;"></iframe>` }}
-      style={{ backgroundColor: 'transparent' }}
-      scrollEnabled={false}
-    />
-  </View>
-);
 
 const MODAL_PAGES = [
   "empresa", "enderecos", "atividade_principal", "atividades_secundarias", "socios", "extra"
@@ -96,7 +66,6 @@ export default function MainScreen() {
   useEffect(() => {
     auditoriaManagerRef.current = new PixAuditoriaManager(setPixAuditLog, empresa);
   }, [empresa, setPixAuditLog]);
-
   useEffect(() => {
     Animated.parallel([
       Animated.timing(logoAnim, { toValue: 1, duration: 950, useNativeDriver: true }),
@@ -248,17 +217,14 @@ export default function MainScreen() {
           ? parts[0].slice(0, 13) + '.' + parts[1].slice(0, 2)
           : parts[0].slice(0, 13);
       valConsolidado = valConsolidado.replace(/^0+(?!\.)/, '') || '0';
-
       if (!PixUtils.PIX_AMOUNT_REGEX.test(valConsolidado) || Number(valConsolidado) < 0.01) {
         setErrorMsg('Valor inválido! Use até 2 casas decimais, com ponto, mínimo R$0.01');
         addPixAudit('pix_invalid_value', { valorRaw, valConsolidado });
         setIsLoading(false);
         return;
       }
-
       const valorPix = Number(valConsolidado).toFixed(2);
       addPixAudit('pix_request', { valorPix, descricao: pixDesc });
-
       const keyPix = empresa?.cnpj ? empresa.cnpj.replace(/\D/g, '') : "00000000000000";
       const descPix = pixDesc || "Pagamento Spacecworp";
       const resp = await PixService.criarPix(
@@ -499,11 +465,7 @@ export default function MainScreen() {
           <ScrollView
             contentContainerStyle={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center' }}
             refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={handleReload}
-                colors={["#0077ff"]}
-              />
+              <RefreshControl refreshing={refreshing} onRefresh={handleReload} colors={["#0077ff"]} />
             }
           >
             <Text style={styles.heading}>ESP32-CAM (VESPA)</Text>
@@ -514,18 +476,8 @@ export default function MainScreen() {
               {isConnected ? "Status: Conectado" : "Status: Desconectado"}
             </Text>
             <View style={styles.buttonRow}>
-              <Button
-                title="Conectar"
-                onPress={handleConnect}
-                color={isConnected ? 'gray' : '#0077ff'}
-                disabled={isConnected}
-              />
-              <Button
-                title="Desconectar"
-                onPress={handleDisconnect}
-                color={isConnected ? '#d60000' : 'gray'}
-                disabled={!isConnected}
-              />
+              <Button title="Conectar" onPress={handleConnect} color={isConnected ? 'gray' : '#0077ff'} disabled={isConnected} />
+              <Button title="Desconectar" onPress={handleDisconnect} color={isConnected ? '#d60000' : 'gray'} disabled={!isConnected} />
               <Button title="Exibir log" onPress={openModalLog} />
             </View>
             <View style={styles.sendRow}>
@@ -612,10 +564,8 @@ export default function MainScreen() {
               </TouchableOpacity>
               {errorMsg && <Text style={{ color: '#d60000', fontWeight: 'bold', marginTop: 7 }}>{errorMsg}</Text>}
             </View>
-            <View style={{ alignSelf: "stretch", marginTop: 20, padding: 7, backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10 }}>
-              <Text style={{ fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16 }}>
-                Auditoria PIX (ações recentes)
-              </Text>
+            <View style={styles.auditArea}>
+              <Text style={styles.auditTitle}>Auditoria PIX (ações recentes)</Text>
               <ScrollView style={{ maxHeight: 100 }}>
                 {pixAuditLog.length === 0 &&
                   <Text style={{ color: "#b99847" }}>Nenhuma atividade Pix registrada nesta sessão.</Text>}
@@ -630,25 +580,14 @@ export default function MainScreen() {
                 ))}
               </ScrollView>
             </View>
-            {/* Escolha só um dos banners abaixo: */}
-            <BannerAppLovin />
-            {/* <BannerWebView /> */}
             <TouchableOpacity
-              style={{
-                marginTop: 8,
-                backgroundColor: '#E53E3E',
-                paddingHorizontal: 30,
-                paddingVertical: 10,
-                borderRadius: 8,
-                alignSelf: 'center',
-              }}
+              style={styles.logoutButton}
               onPress={handleLogout}
             >
               <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>Logout</Text>
             </TouchableOpacity>
             <StatusBar style="auto" />
           </ScrollView>
-          {/* Modais (dados empresa, log, pix) – mantenha igual como no seu código */}
           {empresa?.dados && (
             <Modal
               visible={modalCnpjVisible}
@@ -880,8 +819,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#b5ccf1"
   },
-  bannerContainer: {
-    alignSelf: "stretch", marginVertical: 18, alignItems: "center"
+  auditArea: {
+    alignSelf: "stretch", marginTop: 20, padding: 7,
+    backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10
+  },
+  auditTitle: {
+    fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16
   },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.18)', justifyContent: 'center', alignItems: 'center', },
   card: {
@@ -912,13 +855,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32, paddingVertical: 13, marginTop: 4,
   },
   closeButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 18 },
-  auditArea: {
-    alignSelf: "stretch", marginTop: 20, padding: 7,
-    backgroundColor: "#faf4dd", borderRadius: 8, borderWidth: 1, borderColor: "#edcb75", marginBottom: 10
-  },
-  auditTitle: {
-    fontWeight: "bold", marginBottom: 6, color: "#d6971f", fontSize: 16
-  },
   logoutButton: {
     marginTop: 8,
     backgroundColor: '#E53E3E',
