@@ -85,7 +85,7 @@
     "cics": {
       "type": "cics",
       "properties": {
-        "host": "seu.host.cics",
+        "host": "192.86.32.250",
         "port": 20080,
         "protocol": "http",
         "basePath": "CICSSystemManagement"
